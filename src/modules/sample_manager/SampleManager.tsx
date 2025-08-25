@@ -20,6 +20,7 @@ export default function SampleManager(){
   const updateList = useApp(s=>s.updateSampleList)
   const setActive = useApp(s=>s.setActiveSampleList)
   const deleteList = useApp(s=>s.deleteSampleList)
+  const setTab = useApp(s=>s.setActiveTab)
 
   const active = activeName ? sampleLists[activeName] : null
   const [newListName, setNewListName] = useState(activeName ?? 'Default')
@@ -60,13 +61,17 @@ export default function SampleManager(){
                 {(active?.items ?? []).map((s,i)=>(<li key={i}>{s}</li>))}
               </ol>
             </div>
-            <div className="row" style={{marginTop:8}}>
+            <div className="row" style={{marginTop:8, flexWrap:'wrap', gap:8}}>
+              <button className="btn" onClick={()=>{ if(active){ setRaw(active.items.join('\n')); setNewListName(active.name); } }} disabled={!active}>Edit List</button>
               <button className="btn success" onClick={()=>{ if(active) updateList(active.name, parsed)}} disabled={!active}>Update Active List</button>
               <button className="btn" onClick={()=>setActive(null)} disabled={!active}>Deselect</button>
               <button className="btn danger" onClick={()=>active&&deleteList(active.name)} disabled={!active}>Delete List</button>
             </div>
           </div>
         </div>
+      </div>
+      <div className="row" style={{marginTop:16, justifyContent:'flex-end'}}>
+        <button className="btn primary" onClick={()=>setTab('mapping')} disabled={!active}>Next</button>
       </div>
     </div>
   )
