@@ -6,7 +6,7 @@ import type { Mapping } from '@/types';
 import { downloadCSV } from '@/utils/csv';
 import { withAlpha } from '@/utils/colors';
 
-export default function MappingManager() {
+export default function MappingCreator() {
   const sampleLists = useApp((s) => s.sampleLists);
   const activeListName = useApp((s) => s.activeSampleListName);
   const createMapping = useApp((s) => s.createMapping);
@@ -101,7 +101,7 @@ export default function MappingManager() {
 
   return (
     <div className="panel">
-      <h2>Mapping Manager</h2>
+      <h2>Mapping Creator</h2>
       <div className="small">
         Click the colored square to change color; click a row to make that sample
         active. Use <span className="kbd">↑/↓</span> to move the active sample.
@@ -125,7 +125,7 @@ export default function MappingManager() {
               {Object.values(mappings).length === 0 && (
                 <div className="small">No mappings yet.</div>
               )}
-              <ul>
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                 {Object.values(mappings).map((m) => (
                   <li key={m.id} style={{ marginBottom: 6 }}>
                     <label
