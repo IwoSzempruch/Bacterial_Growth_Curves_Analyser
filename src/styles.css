@@ -434,6 +434,40 @@ h2 {
   color: var(--text);
 }
 
+/* Color chip — pure circle, no background box, fixed size */
+.color-chip {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px; /* circle */
+  overflow: hidden;
+  display: inline-block;
+  flex: 0 0 14px; /* don't stretch on wide screens */
+  background: transparent; /* ensure no pale rectangle */
+  border: 0; /* ensure no border box */
+}
+
+.color-chip > input[type='color'] {
+  position: absolute;
+  inset: 0;
+  opacity: 0; /* hide native UI */
+  cursor: pointer;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  outline: none;
+}
+
+.color-chip > span {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px; /* circle fill */
+  background: transparent; /* actual color is set inline */
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
   .landing h1 {
@@ -455,41 +489,6 @@ h2 {
 
   .container {
     padding: 16px;
-  }
-  /* Color chip — pure circle, no background box, fixed size */
-  .color-chip {
-    position: relative;
-    width: 14px;
-    height: 14px;
-    border-radius: 9999px; /* circle */
-    overflow: hidden;
-    display: inline-block;
-    flex: 0 0 14px; /* don't stretch on wide screens */
-    background: transparent; /* ensure no pale rectangle */
-    border: 0; /* ensure no border box */
-  }
-
-  .color-chip > input[type='color'] {
-    position: absolute;
-    inset: 0;
-    opacity: 0; /* hide native UI */
-    cursor: pointer;
-    border: 0;
-    padding: 0;
-    margin: 0;
-    appearance: none;
-    -webkit-appearance: none;
-    background: transparent;
-    outline: none;
-  }
-
-  .color-chip > span {
-    position: absolute;
-    inset: 0;
-    border-radius: 9999px; /* circle fill */
-    background: transparent; /* actual color is set inline */
-    /* Optional: keep light edge so very light colors remain visible */
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1) inset;
   }
 
   /* Sample row highlight tuned for light theme */
