@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { useApp } from '@/state/store';
 import { ROWS, COLS, wellKey, WELLS } from '@/utils/plate';
 import type { Mapping } from '@/types';
@@ -84,13 +85,13 @@ export default function MappingManager() {
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (!mapping) return;
+      if (!mapping || samples.length === 0) return;
       if (e.key === 'ArrowDown') {
-        setCursor((c) => Math.min(c + 1, samples.length - 1));
+        setCursor((c) => (c + 1) % samples.length);
         e.preventDefault();
       }
       if (e.key === 'ArrowUp') {
-        setCursor((c) => Math.max(c - 1, 0));
+        setCursor((c) => (c - 1 + samples.length) % samples.length);
         e.preventDefault();
       }
     }
@@ -221,15 +222,38 @@ export default function MappingManager() {
                         />
                         <span style={{ background: color }} />
                       </label>
-                      <div style={{ flex: 1 }}>
-                        {i === cursor ? (
-                          <span style={{ color: 'var(--accent)' }}>▶ </span>
-                        ) : (
-                          <span style={{ opacity: 0.3 }}>• </span>
-                        )}
-                        {s}{' '}
-                        <span className="small">
-                          ({assignedCounts[s] ?? 0})
+                      <div
+                        style={{
+                          flex: 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                        }}
+                      >
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            width: i === cursor ? 0 : 10,
+                            height: i === cursor ? 0 : 10,
+                            marginRight: i === cursor ? 0 : 0,
+                            borderLeft:
+                              i === cursor ? '6px solid transparent' : undefined,
+                            borderRight:
+                              i === cursor ? '6px solid transparent' : undefined,
+                            borderBottom:
+                              i === cursor
+                                ? `10px solid ${color}`
+                                : undefined,
+                            background:
+                              i === cursor ? undefined : color,
+                            borderRadius: i === cursor ? undefined : '50%',
+                          }}
+                        />
+                        <span>
+                          {s}{' '}
+                          <span className="small">
+                            ({assignedCounts[s] ?? 0})
+                          </span>
                         </span>
                       </div>
                     </li>
@@ -238,8 +262,7 @@ export default function MappingManager() {
               </ol>
             </div>
             <div className="small" style={{ marginTop: 6 }}>
-              Click the colored square to change color; click a row to make that
-              sample active.
+              Click the colored square to change color; click a row to make that sample active.
             </div>
           </div>
         </div>
@@ -264,17 +287,20 @@ export default function MappingManager() {
                     const color = assigned
                       ? sampleColors[assigned] ?? '#34d399'
                       : '';
-                    const style = assigned
-                      ? {
-                          background: withAlpha(color, 0.18),
-                          borderColor: withAlpha(color, 0.55),
-                        }
-                      : undefined;
+                    const isActiveSample = assigned && assigned === samples[cursor];
+                    const style: CSSProperties = {};
+                    if (assigned) {
+                      style.background = withAlpha(color, 0.18);
+                      style.borderColor = withAlpha(color, 0.55);
+                    }
+                    if (isActiveSample) {
+                      style.boxShadow = '0 0 0 2px var(--accent)';
+                    }
                     return (
                       <div
                         key={w}
                         className="well"
-                        style={style}
+                        style={Object.keys(style).length ? style : undefined}
                         title={assigned ? `${w} → ${assigned}` : w}
                         onClick={() =>
                           assigned ? clearWell(w) : assignWell(w)
