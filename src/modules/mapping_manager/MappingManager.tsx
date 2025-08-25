@@ -16,6 +16,7 @@ export default function MappingManager() {
   const updateAssignments = useApp((s) => s.updateMappingAssignments);
   const renameMapping = useApp((s) => s.renameMapping);
   const deleteMapping = useApp((s) => s.deleteMapping);
+  const setActiveTab = useApp((s) => s.setActiveTab);
 
   // NEW: color actions
   const setSampleColor = useApp((s) => s.setSampleColor);
@@ -166,6 +167,12 @@ export default function MappingManager() {
             </div>
             {mapping && (
               <div className="row" style={{ marginTop: 8, gap: 8 }}>
+                <button
+                  className="btn primary"
+                  onClick={() => setActiveTab('assign')}
+                >
+                  Save Temporarely
+                </button>
                 <button className="btn" onClick={exportCSV}>
                   Export CSV
                 </button>
