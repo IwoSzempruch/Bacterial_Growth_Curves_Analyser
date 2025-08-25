@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest"
   },
   "dependencies": {
     "papaparse": "^5.4.1",
@@ -17,6 +18,8 @@
     "uuid": "^9.0.1"
   },
   "devDependencies": {
+    "vitest": "^1.6.0",
+    "jsdom": "^24.0.0",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@types/papaparse": "^5.2.7",
