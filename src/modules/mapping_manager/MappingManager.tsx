@@ -205,9 +205,14 @@ export default function MappingManager() {
                       title={`Click to select sample "${s}"`}
                     >
                       <label
-                        className="color-chip"
                         title={`Pick color for sample ${s}`}
                         onClick={(e) => e.stopPropagation()}
+                        style={{
+                          position: 'relative',
+                          width: 14,
+                          height: 14,
+                          flex: '0 0 14px',
+                        }}
                       >
                         <input
                           type="color"
@@ -217,43 +222,40 @@ export default function MappingManager() {
                             mapping &&
                             setSampleColor(mapping.id, s, e.target.value)
                           }
+                          style={{
+                            position: 'absolute',
+                            inset: 0,
+                            opacity: 0,
+                            cursor: 'pointer',
+                          }}
                         />
-                        <span style={{ background: color }} />
-                      </label>
-                      <div
-                        style={{
-                          flex: 1,
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 6,
-                        }}
-                      >
                         <span
                           style={{
-                            display: 'inline-block',
+                            position: 'absolute',
+                            left: i === cursor ? 0 : 2,
+                            top: i === cursor ? 0 : 2,
                             width: i === cursor ? 0 : 10,
                             height: i === cursor ? 0 : 10,
-                            marginRight: i === cursor ? 0 : 0,
                             borderLeft:
-                              i === cursor ? '6px solid transparent' : undefined,
+                              i === cursor ? '7px solid transparent' : undefined,
                             borderRight:
-                              i === cursor ? '6px solid transparent' : undefined,
+                              i === cursor ? '7px solid transparent' : undefined,
                             borderBottom:
                               i === cursor
-                                ? `10px solid ${color}`
+                                ? `14px solid ${color}`
                                 : undefined,
                             background:
                               i === cursor ? undefined : color,
                             borderRadius: i === cursor ? undefined : '50%',
                           }}
                         />
-                        <span>
-                          {s}{' '}
-                          <span className="small">
-                            ({assignedCounts[s] ?? 0})
-                          </span>
+                      </label>
+                      <span>
+                        {s}{' '}
+                        <span className="small">
+                          ({assignedCounts[s] ?? 0})
                         </span>
-                      </div>
+                      </span>
                     </li>
                   );
                 })}
