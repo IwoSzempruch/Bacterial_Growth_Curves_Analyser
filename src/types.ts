@@ -31,6 +31,7 @@ export interface Mapping {
   assignments: Record<string, string>; // well -> sampleName
   samples: string[];
   sampleColors?: Record<string, string>; // sampleName -> hex (#rrggbb)
+  sampleSaturations?: Record<string, number>; // sampleName -> saturation 0-100
   notes?: string;
 }
 
