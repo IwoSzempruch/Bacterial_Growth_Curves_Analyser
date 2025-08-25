@@ -316,8 +316,9 @@ export default function MappingManager() {
                     const isActiveSample = assigned && assigned === samples[cursor];
                     const style: CSSProperties = {};
                     if (assigned) {
-                      style.background = withAlpha(color, 0.18);
-                      style.borderColor = withAlpha(color, 0.55);
+                      // Increase opacity so sample colors are easier to distinguish
+                      style.background = withAlpha(color, 0.35);
+                      style.borderColor = withAlpha(color, 0.8);
                     }
                     if (isActiveSample) {
                       style.boxShadow = '0 0 0 2px var(--accent)';
