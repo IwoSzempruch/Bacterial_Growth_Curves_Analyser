@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "echo \"No tests\" && exit 0"
   },
   "dependencies": {
     "papaparse": "^5.4.1",
