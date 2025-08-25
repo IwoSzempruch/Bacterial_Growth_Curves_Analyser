@@ -2,9 +2,9 @@
 
 Minimalna przeglądarkowa aplikacja (Vite + React + TypeScript), skupiona na pierwszych modułach:
 - **Sample Manager** — tworzenie i zarządzanie listami próbek
-- **Input Files Converter** — parsowanie plików CSV/TXT do zunifikowanego formatu (OD600)
-- **Mapping Manager** — przypisywanie próbek do dołków 96-well
+- **Mapping Creator** — przypisywanie próbek do dołków 96-well
 - **Mapping Assigner** — łączenie mappingu z danymi i eksport CSV
+- **Input Files Converter** — parsowanie plików CSV/TXT do zunifikowanego formatu (OD600)
 
 Pozostałe moduły są na razie **stubami**.
 
@@ -33,13 +33,13 @@ Każdy wiersz danych (OD na razie) zawiera:
 
 ## Sterowanie mappingiem
 
-- Wybór listy próbek w Sample Manager, potem w Mapping Manager utwórz nowe mapowanie z aktywnej listy.
+- Wybór listy próbek w Sample Manager, potem w Mapping Creator utwórz nowe mapowanie z aktywnej listy.
 - Kliknięcie dołka przypisuje aktualnie wybraną próbkę; ponowne kliknięcie czyści.
 - Strzałki `↑/↓` zmieniają aktywną próbkę.
 
 ## Eksport
 
-- W **Mapping Manager** można wyeksportować CSV z mapowaniem (`well,sampleName`).
+- W **Mapping Creator** można wyeksportować CSV z mapowaniem (`well,sampleName`).
 - W **Mapping Assigner** można wyeksportować pełne dane z `sampleName` jako CSV.
 
 ## Licencja

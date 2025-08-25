@@ -2,7 +2,7 @@ import { useApp } from '@/state/store'
 import LandingPage from './LandingPage'
 import SampleManager from '@/modules/sample_manager/SampleManager'
 import InputFilesConverter from '@/modules/input_files_converter/InputFilesConverter'
-import MappingManager from '@/modules/mapping_manager/MappingManager'
+import MappingCreator from '@/modules/mapping_creator/MappingCreator'
 import MappingAssigner from '@/modules/mapping_assigner/MappingAssigner'
 import PlotsViewer from '@/modules/plots_viewer/PlotsViewer'
 import OutputCreator from '@/modules/output_file_creator/OutputCreator'
@@ -13,9 +13,9 @@ import DataAnalyser from '@/modules/data_analyser/DataAnalyser'
 const tabs = [
   { id: 'home', label: 'Home'},
   { id: 'samples', label: 'Sample Manager'},
-  { id: 'mapping', label: 'Mapping Manager'},
-  { id: 'converter', label: 'Input Files Converter'},
+  { id: 'mapping', label: 'Mapping Creator'},
   { id: 'assign', label: 'Mapping Assigner'},
+  { id: 'converter', label: 'Input Files Converter'},
   { id: 'plots', label: 'Plots Viewer'},
   { id: 'interactive', label: 'Interactive Plots'},
   { id: 'compiler', label: 'Plots Compiler'},
@@ -45,9 +45,9 @@ export default function App(){
       <div className="container">
         {activeTab==='home' && <LandingPage/>}
         {activeTab==='samples' && <SampleManager/>}
-        {activeTab==='converter' && <InputFilesConverter/>}
-        {activeTab==='mapping' && <MappingManager/>}
+        {activeTab==='mapping' && <MappingCreator/>}
         {activeTab==='assign' && <MappingAssigner/>}
+        {activeTab==='converter' && <InputFilesConverter/>}
         {activeTab==='plots' && <PlotsViewer/>}
         {activeTab==='interactive' && <InteractivePlotsViewer/>}
         {activeTab==='compiler' && <InteractivePlotsCompiler/>}
