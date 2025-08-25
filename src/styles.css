@@ -434,6 +434,24 @@ h2 {
   color: var(--text);
 }
 
+/* Sample list rows */
+.sample-row {
+  padding: 4px 6px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.sample-row.active {
+  background: rgba(37, 99, 235, 0.12); /* light blue */
+}
+
+.sample-row:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
 /* Color chip — pure circle, no background box, fixed size */
 /* Responsive design */
 @media (max-width: 768px) {
@@ -458,19 +476,4 @@ h2 {
     padding: 16px;
   }
 
-  /* Sample row highlight tuned for light theme */
-  .sample-row {
-    padding: 4px 6px;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-  }
-  .sample-row.active {
-    background: rgba(37, 99, 235, 0.12); /* light blue */
-  }
-  .sample-row:hover {
-    background: rgba(0, 0, 0, 0.05);
-  }
 }
