@@ -1,0 +1,36 @@
+name: Apply AI updates
+on:
+  push:
+    branches: [ main ]          # change if your default branch is different
+    paths:
+      - 'updates/**/*.json'     # only when an updates/*.json is added/changed
+permissions:
+  contents: write               # allow the workflow to push back
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm ci || npm i
+      - name: Apply all update specs
+        run: |
+          set -e
+          shopt -s nullglob
+          for f in updates/**/*.json; do
+            echo "Applying $f"
+            node tools/apply-updates.mjs "$f"
+          done
+      - name: Commit changes
+        run: |
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git config user.name  "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "Apply updates specs"
+            git push
+          else
+            echo "No changes to commit"
+          fi
