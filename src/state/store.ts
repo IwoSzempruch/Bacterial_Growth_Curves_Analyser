@@ -114,7 +114,10 @@ export const useApp = create<AppState>()(
         return id;
       },
 
-      updateMappingAssignments: (id, assignments) =>
+      updateMappingAssignments: (
+        id: string,
+        assignments: Record<string, string>
+      ) =>
         set((state) => {
           const m = state.mappings[id];
           if (!m) return {};
