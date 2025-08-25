@@ -16,6 +16,7 @@ export default function MappingCreator() {
   const updateAssignments = useApp((s) => s.updateMappingAssignments);
   const renameMapping = useApp((s) => s.renameMapping);
   const deleteMapping = useApp((s) => s.deleteMapping);
+  const setActiveTab = useApp((s) => s.setActiveTab);
 
   // NEW: color actions
   const setSampleColor = useApp((s) => s.setSampleColor);
@@ -166,6 +167,12 @@ export default function MappingCreator() {
             </div>
             {mapping && (
               <div className="row" style={{ marginTop: 8, gap: 8 }}>
+                <button
+                  className="btn primary"
+                  onClick={() => setActiveTab('assign')}
+                >
+                  Save Temporarely
+                </button>
                 <button className="btn" onClick={exportCSV}>
                   Export CSV
                 </button>
@@ -316,8 +323,9 @@ export default function MappingCreator() {
                     const isActiveSample = assigned && assigned === samples[cursor];
                     const style: CSSProperties = {};
                     if (assigned) {
-                      style.background = withAlpha(color, 0.18);
-                      style.borderColor = withAlpha(color, 0.55);
+                      // Increase opacity so sample colors are easier to distinguish
+                      style.background = withAlpha(color, 0.35);
+                      style.borderColor = withAlpha(color, 0.8);
                     }
                     if (isActiveSample) {
                       style.boxShadow = '0 0 0 2px var(--accent)';

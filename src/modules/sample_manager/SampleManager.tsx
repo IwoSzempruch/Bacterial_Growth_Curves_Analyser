@@ -27,13 +27,38 @@ export default function SampleManager(){
 
   const parsed = normalizeInput(raw)
 
+  const handleFile = async (file: File) => {
+    const text = await file.text()
+    setRaw(text)
+  }
+
   return (
     <div className="panel">
       <h2>Sample Manager</h2>
-      <div className="small">Paste a list of sample names (each on a new line or separated by commas/semicolons/tabs).</div>
+      <div className="small">Paste a list of sample names (each on a new line or separated by commas/semicolons/tabs) or import from a file.</div>
       <div className="row">
         <div className="col" style={{flex:1}}>
-          <textarea value={raw} onChange={e=>setRaw(e.target.value)} placeholder="Sample_1\nSample_2\n..."/>
+          <textarea
+            value={raw}
+            onChange={e=>setRaw(e.target.value)}
+            onDragOver={e=>e.preventDefault()}
+            onDrop={e=>{
+              e.preventDefault()
+              const file = e.dataTransfer.files?.[0]
+              if (file) handleFile(file)
+            }}
+            placeholder="Sample_1\nSample_2\n..."
+          />
+          <div className="row" style={{marginTop:8}}>
+            <input
+              type="file"
+              accept=".txt,.csv"
+              onChange={e=>{
+                const file = e.target.files?.[0]
+                if (file) handleFile(file)
+              }}
+            />
+          </div>
           <div className="row">
             <input type="text" value={newListName} onChange={e=>setNewListName(e.target.value)} placeholder="List name (e.g. 'Experiment-1')"/>
             <button className="btn primary" onClick={()=>{
