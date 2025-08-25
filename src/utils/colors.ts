@@ -6,7 +6,7 @@ export function withAlpha(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-function hslToHex(h: number, s: number, l: number): string {
+export function hslToHex(h: number, s: number, l: number): string {
   s /= 100;
   l /= 100;
   const c = (1 - Math.abs(2 * l - 1)) * s;
@@ -38,6 +38,35 @@ function hslToHex(h: number, s: number, l: number): string {
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
+export function hexToHsl(hex: string): { h: number; s: number; l: number } {
+  const normalized = hex.replace('#', '');
+  const r = parseInt(normalized.slice(0, 2), 16) / 255;
+  const g = parseInt(normalized.slice(2, 4), 16) / 255;
+  const b = parseInt(normalized.slice(4, 6), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h = 0;
+  let s = 0;
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (d !== 0) {
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r:
+        h = (g - b) / d + (g < b ? 6 : 0);
+        break;
+      case g:
+        h = (b - r) / d + 2;
+        break;
+      case b:
+        h = (r - g) / d + 4;
+        break;
+    }
+    h *= 60;
+  }
+  return { h, s: s * 100, l: l * 100 };
+}
+
 export function generateDistinctColors(
   count: number,
   offset = 0
@@ -46,7 +75,8 @@ export function generateDistinctColors(
   if (count <= 0) return colors;
   for (let i = 0; i < count; i++) {
     const hue = Math.round((360 * i) / count + offset) % 360;
-    colors.push(hslToHex(hue, 65, 55));
+    const saturation = 45 + Math.random() * 35; // 45-80
+    colors.push(hslToHex(hue, saturation, 55));
   }
   return colors;
 }

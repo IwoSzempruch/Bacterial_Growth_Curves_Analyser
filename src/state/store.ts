@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
-import { generateDistinctColors } from '@/utils/colors';
+import { generateDistinctColors, hexToHsl, hslToHex } from '@/utils/colors';
 import type { Mapping, SampleList, UnifiedDataset } from '@/types';
 
 interface AppState {
@@ -42,6 +42,11 @@ interface AppState {
 
   // sample colors
   setSampleColor: (id: string, sampleName: string, color: string) => void;
+  setSampleSaturation: (
+    id: string,
+    sampleName: string,
+    saturation: number
+  ) => void;
   randomizeSampleColors: (id: string) => void;
 }
 
@@ -99,6 +104,9 @@ export const useApp = create<AppState>()(
         const sampleColors = Object.fromEntries(
           samples.map((s, i) => [s, colors[i]])
         );
+        const sampleSaturations = Object.fromEntries(
+          samples.map((s, i) => [s, hexToHsl(colors[i]).s])
+        );
         const mapping: Mapping = {
           id,
           name,
@@ -106,6 +114,7 @@ export const useApp = create<AppState>()(
           assignments: {},
           samples,
           sampleColors,
+          sampleSaturations,
         };
         set((state) => ({
           mappings: { ...state.mappings, [id]: mapping },
@@ -170,8 +179,31 @@ export const useApp = create<AppState>()(
           const m = state.mappings[id];
           if (!m) return {};
           const sc = { ...(m.sampleColors ?? {}), [sampleName]: color };
+          const hs = hexToHsl(color).s;
+          const ss = { ...(m.sampleSaturations ?? {}), [sampleName]: hs };
           return {
-            mappings: { ...state.mappings, [id]: { ...m, sampleColors: sc } },
+            mappings: {
+              ...state.mappings,
+              [id]: { ...m, sampleColors: sc, sampleSaturations: ss },
+            },
+          };
+        }),
+
+      setSampleSaturation: (id, sampleName, saturation) =>
+        set((state) => {
+          const m = state.mappings[id];
+          if (!m) return {};
+          const current = m.sampleColors?.[sampleName];
+          if (!current) return {};
+          const hsl = hexToHsl(current);
+          const hex = hslToHex(hsl.h, saturation, hsl.l);
+          const sc = { ...(m.sampleColors ?? {}), [sampleName]: hex };
+          const ss = { ...(m.sampleSaturations ?? {}), [sampleName]: saturation };
+          return {
+            mappings: {
+              ...state.mappings,
+              [id]: { ...m, sampleColors: sc, sampleSaturations: ss },
+            },
           };
         }),
 
@@ -186,8 +218,14 @@ export const useApp = create<AppState>()(
           const sc = Object.fromEntries(
             m.samples.map((s, i) => [s, colors[i]])
           );
+          const ss = Object.fromEntries(
+            m.samples.map((s, i) => [s, hexToHsl(colors[i]).s])
+          );
           return {
-            mappings: { ...state.mappings, [id]: { ...m, sampleColors: sc } },
+            mappings: {
+              ...state.mappings,
+              [id]: { ...m, sampleColors: sc, sampleSaturations: ss },
+            },
           };
         }),
     }),

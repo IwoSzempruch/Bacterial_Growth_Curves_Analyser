@@ -19,6 +19,7 @@ export default function MappingManager() {
 
   // NEW: color actions
   const setSampleColor = useApp((s) => s.setSampleColor);
+  const setSampleSaturation = useApp((s) => s.setSampleSaturation);
   const randomizeSampleColors = useApp((s) => s.randomizeSampleColors);
 
   const activeList = activeListName ? sampleLists[activeListName] : null;
@@ -30,6 +31,7 @@ export default function MappingManager() {
   const assignments = mapping?.assignments ?? {};
   const samples = mapping?.samples ?? [];
   const sampleColors = mapping?.sampleColors ?? {};
+  const sampleSaturations = mapping?.sampleSaturations ?? {};
 
   useEffect(() => {
     setCursor(0);
@@ -40,7 +42,9 @@ export default function MappingManager() {
     if (
       mapping &&
       (!mapping.sampleColors ||
-        Object.keys(mapping.sampleColors).length !== mapping.samples.length)
+        Object.keys(mapping.sampleColors).length !== mapping.samples.length ||
+        !mapping.sampleSaturations ||
+        Object.keys(mapping.sampleSaturations).length !== mapping.samples.length)
     ) {
       randomizeSampleColors(mapping.id);
     }
@@ -71,6 +75,10 @@ export default function MappingManager() {
     const rows = WELLS.map((w) => ({
       well: w,
       sampleName: assignments[w] ?? '',
+      color: assignments[w] ? sampleColors[assignments[w]] ?? '' : '',
+      saturation: assignments[w]
+        ? sampleSaturations[assignments[w]] ?? ''
+        : '',
     }));
     downloadCSV(`${mapping.name.replace(/\s+/g, '_')}.mapping.csv`, rows);
   }
@@ -194,6 +202,7 @@ export default function MappingManager() {
               <ol>
                 {samples.map((s, i) => {
                   const color = sampleColors[s] ?? '#60a5fa';
+                  const sat = sampleSaturations[s] ?? 65;
                   return (
                     <li
                       key={i}
@@ -250,12 +259,29 @@ export default function MappingManager() {
                           }}
                         />
                       </label>
-                      <span>
+                      <span style={{ flex: 1 }}>
                         {s}{' '}
                         <span className="small">
                           ({assignedCounts[s] ?? 0})
                         </span>
                       </span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={sat}
+                        title={`Saturation for ${s}`}
+                        onChange={(e) =>
+                          mapping &&
+                          setSampleSaturation(
+                            mapping.id,
+                            s,
+                            Number(e.target.value)
+                          )
+                        }
+                        style={{ width: 80 }}
+                        onClick={(e) => e.stopPropagation()}
+                      />
                     </li>
                   );
                 })}
