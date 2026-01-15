@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useApp } from '@/state/store'
 import { getParsers, pickParserFor } from './index'
+import { downloadCSV, toMeasurementsCSVRows } from '@/utils/csv'
 import type { UnifiedDataset } from '@/types'
+import { reportUnknownFile } from '@/utils/unknownReporter'
 
 function FileRow({ds, onRemove}:{ds: UnifiedDataset, onRemove:()=>void}){
   return (
@@ -11,7 +13,10 @@ function FileRow({ds, onRemove}:{ds: UnifiedDataset, onRemove:()=>void}){
       <td>{ds.measurementType}</td>
       <td>{ds.rows.length}</td>
       <td>{ds.parserId}</td>
-      <td><button className="btn danger" onClick={onRemove}>Remove</button></td>
+      <td>
+        <button className="btn" onClick={()=>downloadCSV('measurements.data.converted.csv', toMeasurementsCSVRows(ds))}>Download measurements.data.converted.csv</button>
+        <button className="btn danger" style={{marginLeft:8}} onClick={onRemove}>Remove</button>
+      </td>
     </tr>
   )
 }
@@ -20,6 +25,8 @@ export default function InputFilesConverter(){
   const addDataset = useApp(s=>s.addDataset)
   const datasets = useApp(s=>Object.values(s.datasets))
   const removeDataset = useApp(s=>s.removeDataset)
+
+  const hasReporterEndpoint = Boolean(import.meta.env.VITE_UNKNOWN_FILE_ENDPOINT)
 
   const [log, setLog] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
@@ -30,10 +37,46 @@ export default function InputFilesConverter(){
     const parsers = getParsers()
     const newLog: string[] = []
     for (const file of Array.from(files)) {
-      const text = await file.text()
-      const parser = pickParserFor(text, file.name) ?? parsers[0]
+      const isXlsx = file.name.toLowerCase().endsWith('.xlsx')
+      const probeText = isXlsx ? '' : await file.text()
+      const parser = pickParserFor(probeText, file.name)
+      if (!parser) {
+        const consent = window.confirm(
+          `Brak obsługi tego formatu.\n\n` +
+          `Plik: ${file.name} (${file.type || 'unknown'}, ${file.size} B)\n\n` +
+          (hasReporterEndpoint
+            ? `Możesz wysłać plik, aby dodać obsługę formatu.\n`
+            : `Tryb lokalny: brak skonfigurowanego endpointu wysyłki, plik nie zostanie przesłany.\n`) +
+          `Jeśli dane są wrażliwe, utwórz plik w tym samym formacie z danymi fikcyjnymi i wgraj go zamiast oryginału.\n\n` +
+          `Czy chcesz kontynuować?`
+        )
+        if (consent) {
+          if (hasReporterEndpoint) {
+            newLog.push(`File: ${file.name} -> unknown format, wysyłka zgłoszenia...`)
+            try {
+              const res = await reportUnknownFile(file, {
+                source: 'input-files-converter',
+                message: 'Auto-report: unsupported input format',
+              })
+              if (res.issueUrl || res.pullRequestUrl) {
+                newLog.push(`Zgłoszenie utworzone: ${res.issueUrl || res.pullRequestUrl}`)
+              } else {
+                newLog.push('Zgłoszenie wysłane (brak URL w odpowiedzi).')
+              }
+            } catch (err: any) {
+              newLog.push(`[ERR] Nie udało się wysłać pliku: ${err?.message || err}`)
+            }
+          } else {
+            newLog.push(`File: ${file.name} -> unknown format, tryb lokalny (brak wysyłki).`)
+          }
+        } else {
+          newLog.push(`File: ${file.name} -> unknown format, użytkownik anulował wysyłkę.`)
+        }
+        continue
+      }
       newLog.push(`File: ${file.name} -> parser: ${parser.label}`)
-      const res = await parser.parse(text, file.name)
+      const content = isXlsx ? await file.arrayBuffer() : probeText
+      const res = await parser.parse(content, file.name)
       if (res.ok) {
         addDataset(res.dataset)
         if (res.warnings?.length) newLog.push(...res.warnings.map(w=>'[WARN] '+w))

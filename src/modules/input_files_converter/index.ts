@@ -1,8 +1,10 @@
 import type { Parser } from './parsers/BaseParser'
 import WellTimeLongCSV from './parsers/WellTimeLongCSV'
 import TimeSeriesWideCSV from './parsers/TimeSeriesWideCSV'
+import ClariostarXlsx from './parsers/ClariostarXlsx'
 
 const registry: Parser[] = [
+  ClariostarXlsx,
   WellTimeLongCSV,
   TimeSeriesWideCSV
 ]

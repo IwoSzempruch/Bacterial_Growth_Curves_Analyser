@@ -17,5 +17,5 @@ export interface Parser {
   description: string
   fileExtensions: string[]
   detect: (text: string, filename: string) => boolean
-  parse: (text: string, filename: string) => Promise<ParseResult>
+  parse: (content: string | ArrayBuffer, filename: string) => Promise<ParseResult>
 }

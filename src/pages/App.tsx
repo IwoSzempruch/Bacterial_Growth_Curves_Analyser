@@ -1,59 +1,60 @@
 import { useApp } from '@/state/store'
 import LandingPage from './LandingPage'
-import SampleManager from '@/modules/sample_manager/SampleManager'
-import InputFilesConverter from '@/modules/input_files_converter/InputFilesConverter'
-import MappingCreator from '@/modules/mapping_creator/MappingCreator'
-import MappingAssigner from '@/modules/mapping_assigner/MappingAssigner'
+import SamplesAndMapping from '@/modules/samples_mapping/SamplesAndMapping'
 import PlotsViewer from '@/modules/plots_viewer/PlotsViewer'
-import OutputCreator from '@/modules/output_file_creator/OutputCreator'
-import InteractivePlotsViewer from '@/modules/interactive_plots_viewer/InteractivePlotsViewer'
-import InteractivePlotsCompiler from '@/modules/interactive_plots_compiler/InteractivePlotsCompiler'
-import DataAnalyser from '@/modules/data_analyser/DataAnalyser'
-
-const tabs = [
-  { id: 'home', label: 'Home'},
-  { id: 'samples', label: 'Sample Manager'},
-  { id: 'mapping', label: 'Mapping Creator'},
-  { id: 'assign', label: 'Mapping Assigner'},
-  { id: 'converter', label: 'Input Files Converter'},
-  { id: 'plots', label: 'Plots Viewer'},
-  { id: 'interactive', label: 'Interactive Plots'},
-  { id: 'compiler', label: 'Plots Compiler'},
-  { id: 'output', label: 'Output CSV'},
-  { id: 'analysis', label: 'Data Analyser'}
-]
+import BlankCorrectionCheck from '@/modules/interactive_plots_viewer/InteractivePlotsViewer'
+import CurvesSmoothing from '@/modules/curves_smoothing/CurvesSmoothing'
+import Parameters from '@/modules/parameters/Parameters'
+import NavigationBar from '@/components/NavigationBar'
+import Footer from '@/components/Footer'
+import { useEffect } from 'react'
 
 export default function App(){
-  const activeTab = useApp(s=>s.activeTab)
-  const setActiveTab = useApp(s=>s.setActiveTab)
+  const activeTab = useApp(s=>s.activeTab === 'logPhase' ? 'parameters' : s.activeTab)
+  const theme = useApp(s => s.theme)
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+  }, [theme])
 
   return (
     <div className="app">
-      {activeTab !== 'home' && (
-        <div className="topbar">
-          <div className="logo">Bacterial Growth Curves</div>
-          <div className="nav" role="tablist" aria-label="Modules">
-            {tabs.map(t => (
-              <button key={t.id}
-                className={['', activeTab===t.id?'active':''].join(' ')}
-                onClick={()=>setActiveTab(t.id)}>{t.label}</button>
-            ))}
+      <NavigationBar />
+      <main className="main">
+        {activeTab==='home' ? (
+          <LandingPage/>
+        ) : (
+          <div className="container">
+            {activeTab==='samplesMapping' && <SamplesAndMapping/>}
+            <div
+              style={{
+                display: activeTab === 'plots' ? 'block' : 'none',
+              }}
+              aria-hidden={activeTab === 'plots' ? undefined : true}
+            >
+              <PlotsViewer/>
+            </div>
+            <div
+              style={{
+                display: activeTab === 'interactive' ? 'block' : 'none',
+              }}
+              aria-hidden={activeTab === 'interactive' ? undefined : true}
+            >
+              <BlankCorrectionCheck/>
+            </div>
+            <div
+              style={{
+                display: activeTab === 'compiler' ? 'block' : 'none',
+              }}
+              aria-hidden={activeTab === 'compiler' ? undefined : true}
+            >
+              <CurvesSmoothing/>
+            </div>
+            {activeTab==='parameters' && <Parameters/>}
           </div>
-        </div>
-      )}
-
-      <div className="container">
-        {activeTab==='home' && <LandingPage/>}
-        {activeTab==='samples' && <SampleManager/>}
-        {activeTab==='mapping' && <MappingCreator/>}
-        {activeTab==='assign' && <MappingAssigner/>}
-        {activeTab==='converter' && <InputFilesConverter/>}
-        {activeTab==='plots' && <PlotsViewer/>}
-        {activeTab==='interactive' && <InteractivePlotsViewer/>}
-        {activeTab==='compiler' && <InteractivePlotsCompiler/>}
-        {activeTab==='output' && <OutputCreator/>}
-        {activeTab==='analysis' && <DataAnalyser/>}
-      </div>
+        )}
+      </main>
+      <Footer />
     </div>
   )
 }

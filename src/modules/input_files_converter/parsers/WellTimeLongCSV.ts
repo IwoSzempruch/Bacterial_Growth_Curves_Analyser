@@ -24,7 +24,8 @@ const WellTimeLongCSV: Parser = {
     const head = text.slice(0, 1024).toLowerCase()
     return head.includes('well') && head.includes('time') && (head.includes('od') || head.includes('value'))
   },
-  parse: async (text, filename): Promise<ParseResult> => {
+  parse: async (content, filename): Promise<ParseResult> => {
+    const text = String(content)
     const res = Papa.parse(text, { header: true, dynamicTyping: false, skipEmptyLines: 'greedy' })
     if (res.errors?.length) {
       return { ok: false, error: 'Błąd parsowania CSV: ' + res.errors[0].message }

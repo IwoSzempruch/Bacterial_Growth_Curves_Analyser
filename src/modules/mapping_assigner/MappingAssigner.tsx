@@ -54,14 +54,14 @@ export default function MappingAssigner(){
             <div className="small">File: <b>{dataset.sourceFile}</b> | Mapping: <b>{mapping.name}</b></div>
             <table className="table" style={{marginTop:8}}>
               <thead><tr>
-                <th>runId</th><th>plateId</th><th>sourceFile</th><th>timeSeconds</th><th>timeLabel</th><th>well</th><th>measurementType</th><th>value</th><th>sampleName</th>
+                <th>runId</th><th>plateId</th><th>sourceFile</th><th>timeSeconds</th><th>timeLabel</th><th>well</th><th>measurementType</th><th>value</th><th>sample</th>
               </tr></thead>
               <tbody>
                 {preview.map((r,i)=>(
                   <tr key={i}>
                     <td>{r.runId}</td><td>{r.plateId}</td><td>{r.sourceFile}</td>
                     <td>{r.timeSeconds}</td><td>{r.timeLabel}</td><td>{r.well}</td>
-                    <td>{r.measurementType}</td><td>{r.value}</td><td>{r.sampleName}</td>
+                    <td>{r.measurementType}</td><td>{r.value}</td><td>{r.sample}</td>
                   </tr>
                 ))}
               </tbody>

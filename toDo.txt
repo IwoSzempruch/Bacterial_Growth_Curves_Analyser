@@ -1,0 +1,312 @@
+- Dodać obsługę pliku Oli
+
+- po zaimportowaniu assignmentu strona Setup ma się przewinąć na sam dół
+
+- pojawiający się baner z prośbą o feedback i informacją o możliwości wsparcia
+
+- wykresy do pobrania
+
+- tekst w trybie nocnym nie powinien być biały, nic nie powinno być białe, max może być szare
+
+Karta Blank Correction Check:
+- Panel wyboru replikatów taki jak w RAw data check ale bez przycisków do wykluczania z analizy. Ten sam wygląd i ten sam styl i ta sama logka działania
+- Panel Plot controls taki jak w Raw Data Check
+- Plot controls i PAnel wyboru replikatów tyczą się obu wykresów na raz
+- Oba wykresy w osobne kontenery
+- Choose File ma być na samej górze w swoim kontenerze z nagłówkiem, opisem, help btn i bubble,
+- Przycisk Apply Blank Correction ma być na samym dole i ma mieć styl taki jak przycisk Sent do blank correction z karty Raw Data Check
+- Asignment i wybór assignmentu usunąć - dane są albo załadowywane przez import albo z poprzedniej karty
+
+Każda karta ma mieć ten sam footer i ten sam pasek nawigacji
+W pasku nawigacji mają być przyciski do zmiany języka na polski/angielski i przycisk zminy trybu na nocny/jasny
+footer ma być zdefiniownay w jednym miejscu
+Zmień globalny body styl: jasnoszaroniebieskie tło, nad-panele jasnoszare i jakoś wymyśl to sensownie i zastosuj w landing page
+zmień landing page, ogólnie będą panele z animacjami funkcjonalności programu, wymyśl to jakoś sensownie
+
+Zmień stye paneli:
+Style i funkcjonalności wszystkich paneli wykresów będzie zdefionioway w jednym miejscu. Na razie tylko zdefiniuj a potem będziemy go stopniow podłączać w odpowiednie miejsca
+Style Innych paneli też będą zdefiniowane w ewentyalnych wariantach
+
+Każdy panel ma mieć swój helpbutton w kształcie koła, wewnątrz którego jest znak zapytania. Po kliknieciu przycisku wyświetla się baner z tesktem wyjaśniającym co użytkownik ma teraz zrobić. Tekst ma odpowiadać na zmianę języka. Przycisk i baner mają odpowiadać na zmianę stylu na nocny/jasny.
+
+W Pasku nawigacji Bacterial Growth Curves ma się nazywać Growth Curves Analyser Demo i ma tam też być ikona z kodem: ```<svg
+  width="256"
+  height="256"
+  viewBox="0 0 256 256"
+  xmlns="http://www.w3.org/2000/svg"
+>
+  <!-- Tło z delikatnym gradientem -->
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+
+    <!-- Gradient dla krzywej wzrostu -->
+    <linearGradient id="curveGrad" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0%" stop-color="#22c55e"/>
+      <stop offset="50%" stop-color="#a855f7"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Zaokrąglony kwadrat tła -->
+  <rect
+    x="8"
+    y="8"
+    width="240"
+    height="240"
+    rx="56"
+    fill="url(#bgGrad)"
+  />
+
+  <!-- Oś X i Y (układ współrzędnych) -->
+  <g stroke="#64748b" stroke-width="4" stroke-linecap="round">
+    <!-- Oś X -->
+    <line x1="52" y1="204" x2="212" y2="204" />
+    <!-- Oś Y -->
+    <line x1="52" y1="72" x2="52" y2="204" />
+  </g>
+
+  <!-- Linie pomocnicze (siatka) -->
+  <g stroke="#1f2937" stroke-width="2" opacity="0.6">
+    <line x1="52" y1="172" x2="212" y2="172" />
+    <line x1="52" y1="140" x2="212" y2="140" />
+    <line x1="52" y1="108" x2="212" y2="108" />
+  </g>
+
+  <!-- Krzywa wzrostu (logistyczna) -->
+  <path
+    d="
+      M 56 198
+      C 80 196, 96 190, 110 178
+      C 128 162, 140 140, 152 124
+      C 170 100, 188 92, 212 92
+    "
+    fill="none"
+    stroke="url(#curveGrad)"
+    stroke-width="6"
+    stroke-linecap="round"
+  />
+
+  <!-- Kropki pomiarowe -->
+  <g fill="#e5e7eb" stroke="#0f172a" stroke-width="2">
+    <circle cx="72" cy="190" r="5" />
+    <circle cx="96" cy="182" r="5" />
+    <circle cx="120" cy="164" r="5" />
+    <circle cx="144" cy="138" r="5" />
+    <circle cx="172" cy="112" r="5" />
+    <circle cx="200" cy="100" r="5" />
+  </g>
+
+  <!-- Skrót nazwy w rogu: GCA -->
+  <text
+    x="204"
+    y="48"
+    text-anchor="end"
+    font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+    font-size="26"
+    font-weight="600"
+    fill="#cbd5f5"
+  >
+    GCA
+  </text>
+
+  <!-- Badge DEMO -->
+  <g transform="rotate(-18 64 40)">
+    <rect
+      x="26"
+      y="24"
+      rx="10"
+      ry="10"
+      width="90"
+      height="32"
+      fill="#b91c1c"
+      opacity="0.95"
+    />
+    <text
+      x="71"
+      y="46"
+      text-anchor="middle"
+      font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+      font-size="18"
+      font-weight="700"
+      fill="#ffffff"
+    >
+      DEMO
+    </text>
+  </g>
+</svg>
+```
+
+
+Przy zmianie wielkości ekranu pasek nawigacji ma mieć maxheight i być przewijalny, jeżeli nie widać na raz całej jego zawartości
+
+Karta Setup:
+Nad-panel Setup ma mieć miejsce na opis tego co się tutaj dzieje, panele funkcjonalne mają zostać z niego uwolnione. Styl ma przypominać bardziej ten z landing page.
+
+Panele funkcjonalne
+Mają mieć inny styl
+Przycisk import data ma być w osobnym panelu "Import assignment".
+
+Assign mappings to files ma być osobnym panelem, nie wewnątrz convert + assignment
+
+Panel excluding points:
+przyciski pomocy tyczące się parametrów mają mieć nieco inny styl niż wszystkie inne przyciski pomocy, mają być mniejsze
+dodaj przcisk do ponownego przeproadzenia wykluczania pojedynczych punktów z danych - obecnie pukty wykluczane są domyślnie, ale po zmianie parametrów powinna być możlwość przeprowadzenia tego wykluczania od nowa
+
+Panel wykresu: opis osi x oraz oznaczenia liczbowe wychodzą poza panel wykresu, są pod nim w niektórych ustawieniach powiększenia zawartości okna przeglądarki, napraw to DONE
+
+Karta Blank Check:
+Umieszczamy wykres w panel, taki sam styl panleu i przyciski jak w panelu wykresu w karcie RAw Data,
+Dodajemy panel plot control
+Legenda i wybór replkatów: ten panel ma mieć dokłądnie taki sam styl i przyciski jak panel "Samples & Replicates" z karty Raw Data, ale bez przycisków do wykluczania z analizy
+
+W panelu z przyciskiem Send to blank correction dodaj przycisk pomocy
+
+W każdej karcie po prawej stronie na dole powinien być przycisk w kształcie dymka czatu, po kliknięciu któego wyświetla się komunikat o prośbie o feedback i zgłaszanie błędów
+
+Okno Blank Correction:
+Domyślnie na wykresie przed korektą blank ma się pojawiać tylko pierwszy replikat pierwszej próby
+
+Ususwamy przyciski i pola: Choose File, Assignment.
+
+Dodaj u góry panel informacyjny z nagłówkiem, opisem i przyciskiem pomocy.
+
+Layout: w tej karcie Lewa strona jest zarezerwowana dla panelu "Legend & Replicates". Po prawej stronie od tego panelu ma być panel "Plot Controls" (Before blank correction) a pod nim Panel wykresu before blank correction.
+Pod nimi ma być przycisk "Apply Blank Correction" w swoim panelu, z przyciskiem pomocy. Przycisk "Apply Blank Correction" ma mieć styl podkreślony taki jak przycisk "Send to blank correction" z karty Raw Data. Po kliknięciu tego przycisku pod jego panelem pojawia się kolejny panel "Plot Controls" (After Blank Correction) a pod nim Panel Wykresu After Blank Correction.
+Panel "Legend & Replicates" ma mieć wysokość ekranu (z górnym ograniczeniem - ma być pod panelem informacyjnym).Scrolowanie strony w  dół ma sprawiać, że panele po jego prawej stronie tj. panele wykresów i plot controls przewijają się, ale sam "Legend & Replicates" ma wyglądać jakby był w miejscu. Dolne Ograniczenie tego Panelu to dolna krawęć ostatniego wyświetlanego panelu wykresu.
+
+Panel "Samples & Replicates": zawartość ma mieć taką szerokość żeby się mieścić.
+Scrollbar pionowy jest wyrównany do górnej krawędzi plot controls a górna krawędź panelu Samples&Replicates jest niżej, podnieś ją.
+Kiedy scroluję stronę w dół, chcę widzieć górną granicę panelu - obecnie wchodzi pod pasek nawigacji, oraz chcę, żeby dolna granica panelu Samples & Replicates była na dole ekranu, tj na dole tego co widać na ekranie.
+Pionowy scrollbar panelu , ten od całęgo panelu a nie od wierszy próbi replikatów, ma zniknąć.
+
+PAnel informacyjny: To Info "Data from raw data data" i Source i assignments, nie chcę tego widzieć - ma zniknąć. Ma też zniknąć kontener z gradientem.
+Panel Apply Blank Correction: PRzycisk Download .blanked.json ma mieć styl aktywny, przyciski mają być wyśrodkowane
+Pod Panelem wykresu po korekcie blank dodaj panel z przyciskiem Next, który będzie przenosił do kolejnejkarty
+
+
+Panele plot controls karty Curves smoothing mają mieć dostosowany layout i być bardziej podobne do innych paneli plot controls np z karty Blank Check
+Przyciski Legendy w każdym z paneli plot controls wszystkich karty powinny mieć styl aktywny
+
+Panel Smoothing Controls: dostosuj styl i layout tak aby przypominał trochę bardziej panele plot controls
+
+Panel Log identification controls: do każdego parametru dodaj mały przycisk pomocy
+
+Karta Parameters:
+Panel Sampels:
+- przyciski on/off, zamiast nich mają być przyciski z tickami i krzyżykami, tak jak w panelu Samples z Karty Curves Smoothing.
+- W panelach poszczególnych prób nie ma być żadnych parametrów, a w nazwach "kolumn" też nie ma być Parameters
+- Panel ma być wyrównany do górnej krawęci pierwszego panelu Plot controls
+
+Panele Plot Controls: 
+- dodać analogiczne jak w panelach plot controls z karty BLank Check: przyciski do zmiany wielkości czcionki, przyciski eksportu/kopiowania png wykresu, przycisk legendy. Do paneli wykresów dodać legendę o logice analogicznej jak legendy wykresó z innych kart
+- toggle pokaż wartości nad słupkami powinien być lepiej wystylizowany
+- przycisk reset ma mieć styl zwykłego przycisku, takiego jak np. przycisk Kopiuj PNG z panelu plot controls cobined z karty Curves Smoothing DONE
+
+Panele wykresów:
+- dodać przyciski obsługę trybu ekreanowego, takie samo jak w wykresach z poprzednich kart np. Wykres Combined Curves z karty Cures Smoothing
+- panele powinny mieć taką wysokość jak wspomniany panel wykresu Combined Curves
+- jeżeli przez szerokość kolumn nazwy prób musiały by nachodzić na siebie lub zawijać to wtedy mają być pisane pionowo pod kolumnami, to samo z wartościami liczbowymi, jeśli pokazane
+- wartości liczbowe mają być z lewej strony osi Y i nie zachodzić na tę oś DONE
+
+Przycisk nawigacji niech będzie jedak u góry, zaraz pod paskiem nawigacji miedzy kartami
+
+Karta Parameters, panele wykresów, tryb fullscreen:
+Po kliknięciu przycisku pokaż plot controls, odpowiedni panel plot controls powinien pojawić się poniżej wykresu. 
+
+Fullscreen problems
+- escape
+- widoczność przycisków przy różnych rozmiarach okna przeglądarki
+- styl przycisku legendy
+
+Karta prameters: domyslnie legendy mają być toggled off
+W Plot controls powinein być też suwak do ustawiania kąta wartości liczbowych nad słupkami
+Orientacja wartści liczbowych powinna być zmieniona: koniec wartości bliżej słupka a początek dalej, aby kierunek czytania był taki sam jak kierunek nazw prób.
+
+Fragment rozmowy z asystentem projektu:
+```w którym miejscu są kalkulowane parametry do karty parameters? przeanalizuj z jakich danych powinny być wyliczane odchylenia standardowe i zakresy ufności dla każdego z tych parametrów
+
+
+Parametry do karty są liczone w src/utils/parameters.ts w funkcji computeParameters(...); wywołuje ją applyComputation w src/modules/parameters/Parameters.tsx po wczytaniu pliku .smoothed/.blanked/.assignment. computeParameters bierze krzywe z dataset.sample_curves (jeśli są) lub z dataset.rows, buduje serię czas–OD, oblicza pochodne/sliding µ (z regresji ln(OD) w oknie), a następnie wyprowadza m.in. muMax, td, lambda (threshold/tangent), kHat, odMax, tInflection, tMid, slopeAtInflection, auc, czasy detekcji i długość zapisanej fazy log.
+
+Dane dostępne dziś to pojedyncza, zmergowana krzywa na próbkę:
+
+sample_curves z pliku smoothing zawiera tylko jedną wygładzoną serię na próbkę (replicates/wells zostają spłaszczone).
+Gdy sample_curves brak, computeParameters grupuje dataset.rows po sample i uśrednia wartości w tym samym czasie (też gubi rozdzielenie na well/replicate).
+W efekcie w strukturze results nie ma informacji o wariancji ani o rozkładzie po replikatach — standardowe odchylenia/CI nie są liczone i nie ma na czym ich policzyć.
+Z jakich danych powinny być liczone odchylenia standardowe i przedziały ufności:
+
+Potrzebne są parametry policzone osobno dla każdej replikacji (well) danej próbki, zanim zostaną zmergowane. Źródłem mogą być:
+surowe / blankowane dataset.rows z polem well/replicate (w plikach assignment),
+albo per-well wygładzone krzywe (trzeba je eksportować z Curves Smoothing; teraz sample_curves ich nie zawiera).
+Pipeline: dla każdej replikacji uruchomić tę samą procedurę co computeParameters → otrzymać zestaw wartości muMax, td, lambda, kHat, odMax, tInflection, tMid, slopeAtInflection, auc, czasy detekcji. Następnie:
+SD: klasycznie sd(param) po wartościach z replikatów.
+95% CI: średnia ± t_(n-1,0.975) * sd/√n (dla n≥2); przy małej liczbie replik lub brak normalności — bootstrap po punktach krzywej danej repliki.
+Parametry zależne: td dziedziczy niepewność muMax; lambda, tInflection, slopeAtInflection, tMid, czasy detekcji i AUC dostają swoje SD/CI z rozkładu wartości między replikami. logStart/logEnd/tLogDuration wymagają log-phase per replika (obecnie mamy tylko jeden zakres na próbkę, więc nie wygenerujemy wariancji bez zapisywania zakresów na poziomie well).
+Konsekwencja: aby realnie raportować SD/CI na karcie Parameters, trzeba zachować lub odtworzyć krzywe per well (surowe lub wygładzone), liczyć parametry per-well i dopiero agregować statystyki; z pojedynczej uśrednionej krzywej, którą teraz podaje computeParameters, tych metryk nie da się wyprowadzić.
+
+Jakie zmiany w projekcie muszę wprowadzić aby tak było? wtedy każdy well musiałby mieć osobono usuwane punkty (raw data), ustalany blank (Blank Check) i wygładzaną krzywą (Curves Smoothing). Jak to obługiwać w plikach json na których opiera się workflow projektu efektywnie wykorzystując miejsce w tych plikach? W Którym miejscu wporwadzić taką obsługę? Gdzie dodać paski postępu?
+
+
+Parametry per-well: musisz liczyć każdy parametr na poziomie well (po wykluczeniu punktów, po blanku, po smoothingu), a dopiero potem agregować do próbki (średnia, SD, 95% CI). To wymaga, by raw/blank/smoothed dane były przechowywane per well, a nie tylko jako jedna zmergowana krzywa próbki.
+
+Zmiany w strukturze plików JSON (minimalne, oszczędne):
+
+Assignment / blanked / smoothed payload:
+Zamiast samego sample_curves (jedna krzywa na próbkę) dodaj per-well:
+{
+  "well_curves": [
+    {
+      "sample": "SampleA",
+      "well": "B03",
+      "replicate": 2,
+      "time_min": [0,10,20,...],
+      "od600_raw": [...],                // opcjonalnie, jeśli chcesz móc odtworzyć blankowanie
+      "od600_blank_corrected": [...],    // po Blank Check
+      "od600_smoothed": [...],           // po Curves Smoothing (ostatnia iteracja)
+      "curation": { "excluded_points": [idx,...] } // per-well usunięte punkty
+    }
+  ],
+  "blankCorrection": { "measurementKey": "...", "blankKey": "...", "blanks": [ { "well": "H12", "value": 0.01 } ] },
+  "log_phases": [ { "sample": "SampleA", "start": 120, "end": 240 } ], // dalej per-sample
+  "meta": { ... }
+}
+sample_curves możesz dalej trzymać jako pochodną (średnia/median z well_curves) dla szybkiego podglądu, ale zawsze przeliczaj ją na starcie z well_curves, żeby nie dublować danych (oszczędność miejsca).
+Curation z Blank Check i manualne usuwanie punktów zapisuj per-well w polu curation/excluded_points lub curation/excludedIndices.
+W Curves Smoothing zapisuj per-well ostatnią wersję wygładzonej serii (od600_smoothed) plus ew. historię parametrów smoothingu (span/degree) w meta, nie per punkt.
+Miejsca w kodzie do zmiany:
+
+Curves Smoothing (src/modules/curves_smoothing/CurvesSmoothing.tsx):
+Pracuj na krzywych per-well (nie agreguj replikatów przy budowie curves).
+Eksportuj do JSON well_curves zamiast/potem obok sample_curves. buildSampleCurvesExport zmień tak, by robiło agregację z well_curves tylko do podglądu, ale zapisywało well_curves w payload.
+Blank Correction Check / Raw Data Cleaning (src/modules/interactive_plots_viewer/InteractivePlotsViewer.tsx i miejsca curation w store):
+UI musi pozwolić usuwać punkty per well i zapisywać to do curation.excluded_points w well_curves.
+Blankowanie liczyć i zapisywać per well (od600_blank_corrected w well_curves), nie tylko wiersze rows.
+Parameters:
+W src/utils/parameters.ts rozszerz extractSeries: zamiast łączyć replikaty, zwracaj listę serii per well (sample+well id). Dodaj warstwę agregacji: licz parametry per-well → grupuj po sample → wylicz średnią/SD/CI. W ParameterResult dołóż pola sd, ciLow, ciHigh dla każdego parametru na poziomie próbki; opcjonalnie osobny typ dla WellParameterResult (per well) i SampleParameterSummary (agregat).
+W src/modules/parameters/Parameters.tsx dodaj przełączanie widoku: per-well vs agregat próbki; przy eksporcie CSV/JSON zapisz zarówno wyniki per-well, jak i agregaty (średnia, SD, 95% CI).
+Log Phase Identification (jeśli potrzebne per-well): jeżeli chcesz różne log-phase na replikaty, dodaj opcjonalne log_phases_wells i obsłuż w computeParameters wybór fazy per well; inaczej zostaw per-sample, ale pamiętaj, że wtedy parametry per well będą używać wspólnej fazy.
+Jak efektywnie oszczędzać miejsce:
+
+Trzymaj jedną oś czasu na well: time_min + odpowiednie serie wartości (od600_*) w jednym obiekcie.
+Nie zapisuj historii smoothingu per punkt; tylko finalny od600_smoothed + meta smoothingu (span/degree) w payload.
+sample_curves traktuj jako cache do podglądu, ale generuj on-the-fly z well_curves przy imporcie (wtedy można go pominąć w eksporcie, jeśli rozmiar pliku jest krytyczny).
+Jeśli pliki są duże, rozważ gzip przy eksporcie (downloadBlob z application/gzip) lub opcjonalną redukcję precyzji do np. 5–6 miejsc po przecinku.
+Gdzie dodać paski postępu:
+
+Import/parsowanie dużych plików oraz smoothing/parametry mogą trwać: w Curves Smoothing i Parameters dodaj progress w stanie komponentu (np. krok: wczytywanie → filtracja → blank → smoothing per well → agregacja).
+W Parameters pokaż procent/etap przy liczeniu parametrów (pętla po wellach i/lub próbkach); aktualizuj status w applyComputation.
+W Curves Smoothing pokaż postęp LOESS per well (liczba welli przetworzonych / całość); w Blank Check podobnie przy batchowym blankowaniu.
+Minimalna ścieżka implementacji:
+
+Rozszerz model danych o well_curves i przerób eksport z Curves Smoothing.
+Przepisz extractSeries/computeParameters na per-well → agregaty z SD/CI.
+Zaktualizuj UI Parameters (tabele/eksport) i Interaktywny Blank Check (per-well curation).
+Dodaj progress bary w Curves Smoothing i Parameters przy dłuższych obliczeniach.
+Jeśli chcesz, mogę zacząć od refaktoryzacji computeParameters do trybu per-well + agregaty i szkicu nowego payloadu z well_curves.
+
+Ta logika jest do usunięcia, program ma zawsze brać pod uwagę tylko sample_curves, no i po zmianach well_curves
+"Gdy sample_curves brak, computeParameters grupuje dataset.rows po sample i uśrednia wartości w tym samym czasie (też gubi rozdzielenie na well/replicate)."```
+Na podstwie inormacji w tym fragmencie wprowadź odpoweidnie zmiany w projekcie, aby możliwe było wyliczanie odhyleń standardowych i przedziałów ufności. Jeżeli dobrze zaplanuj zmiany i dobrze opisz zmiany obsługi plików
