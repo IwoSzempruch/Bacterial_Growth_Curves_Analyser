@@ -1,0 +1,14 @@
+- Funkcja przeglądania danych z kilku analiz LATER.
+- Testing algorythm LATER
+- Fullscreen dla całego programu - przycisk w pasku zadań LATER
+- Poprawa stylów nightmode LATER
+- Nawigacja przez kolejne próby na wykresach: LATER
+Przytrzymanie klawisza shift podcas klikania strzałki: zatrzymuje obecnie zaznaczone replikaty/próby. Oznacza to że jeżeli strzałka zostanie kliknęta podczas trzymania shifta, to obecnie zaznaczone replikaty zostaną na wykresie i pokaże się na wykresie dodatkowo kolejny repikat/strzałka
+- W karcie Parameters klikniecie przycisku X ma nawigować do kolejnej sekcji, nawet w trybie pełnoekranowym LATER
+- Importowanie plików w karcie parameters LATER
+- Dane wyświetlane po najechaniu na punkt wykresu mają odpowiadać zmianie jezyka. ma się to tyczyć wszystkich wykresów wszystkoch kart. LATER
+
+W Każdej Karcie panale "Plot controls" Mają w polskiej wersji nazywać się "Sterowanie wykresem". W każdym plot controls popraw polskie znaki. Upewnij się, że nie wprowadzicz corrupted znaków. PRzed każdą zmianą kodu upewnij się, że rozwiązujesz problem a nie szkodzisz. W Panelach plot control w karcie Wygładzanie Krzywych przycisk Pokaż/Ukryj Punkty surowe ma mieć tylko tekst "Punkty danych" albo po ang "Data points" Bez "Pokaż/Ukryj"
+W Plot controls popraw polskie znaki(Oś, Przedział itd.)
+
+LICZENIE PRZEDZIAŁÓW UFNOŚCI
