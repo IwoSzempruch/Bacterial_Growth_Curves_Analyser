@@ -194,14 +194,41 @@ function linearRegression(xs: number[], ys: number[]): { slope: number; intercep
   return { slope, intercept }
 }
 
-function slidingMu(timesH: number[], lnOd: number[], window = 7): { t: number; mu: number | null }[] {
+type MuWindowMode = 'centered' | 'trailing'
+
+function slidingMu(
+  timesH: number[],
+  lnOd: number[],
+  window = 7,
+  mode: MuWindowMode = 'centered',
+  requireFullWindow = false,
+): { t: number; mu: number | null }[] {
   if (!timesH.length || !lnOd.length || timesH.length !== lnOd.length) return []
   const n = timesH.length
-  const half = Math.floor(window / 2)
+  const baseWindow = Math.max(2, Math.round(window))
+  const centeredWindow = baseWindow % 2 === 0 ? baseWindow + 1 : baseWindow
+  const effectiveWindow = mode === 'centered' ? centeredWindow : baseWindow
+  const half = mode === 'centered' ? Math.floor(effectiveWindow / 2) : 0
+
   const out: { t: number; mu: number | null }[] = []
   for (let i = 0; i < n; i += 1) {
-    const start = Math.max(0, i - half)
-    const end = Math.min(n - 1, i + half)
+    let start = 0
+    let end = 0
+    if (mode === 'trailing') {
+      end = i
+      start = i - effectiveWindow + 1
+    } else {
+      start = i - half
+      end = i + half
+    }
+
+    if (requireFullWindow && (start < 0 || end >= n)) {
+      out.push({ t: timesH[i], mu: null })
+      continue
+    }
+
+    start = Math.max(0, start)
+    end = Math.min(n - 1, end)
     const sliceT = timesH.slice(start, end + 1)
     const sliceLn = lnOd.slice(start, end + 1)
     const regression = linearRegression(sliceT, sliceLn)
@@ -401,10 +428,14 @@ function extractWellSeries(entry: AssignmentEntry | null): { series: WellSeries[
   const logPhaseMap = buildLogPhaseMap(entry)
   const wellCurves = Array.isArray((entry.dataset as any).well_curves)
     ? (entry.dataset as any).well_curves
-    : []
-  const sampleCurves = Array.isArray(entry.dataset?.sample_curves)
-    ? entry.dataset.sample_curves
-    : []
+    : Array.isArray((entry.dataset as any).wellCurves)
+      ? (entry.dataset as any).wellCurves
+      : []
+  const sampleCurves = Array.isArray((entry.dataset as any)?.sample_curves)
+    ? (entry.dataset as any).sample_curves
+    : Array.isArray((entry.dataset as any)?.sampleCurves)
+      ? (entry.dataset as any).sampleCurves
+      : []
 
   const source = wellCurves.length ? wellCurves : sampleCurves
   const usingWellCurves = wellCurves.length > 0
@@ -431,12 +462,19 @@ function extractWellSeries(entry: AssignmentEntry | null): { series: WellSeries[
         curve?.replicate != null && !Number.isNaN(Number(curve.replicate))
           ? Number(curve.replicate)
           : undefined
-      const timeRaw = Array.isArray(curve?.time_min) ? curve.time_min : []
+      const timeRaw =
+        (Array.isArray(curve?.time_min) && curve.time_min) ||
+        (Array.isArray(curve?.timeMin) && curve.timeMin) ||
+        []
       const valsRaw =
         (Array.isArray(curve?.od600_smoothed) && curve.od600_smoothed) ||
         (Array.isArray(curve?.od600_smoothed_vals) && curve.od600_smoothed_vals) ||
+        (Array.isArray(curve?.od600Smoothed) && curve.od600Smoothed) ||
+        (Array.isArray(curve?.od600SmoothedVals) && curve.od600SmoothedVals) ||
         (Array.isArray(curve?.od600_blank_corrected) && curve.od600_blank_corrected) ||
+        (Array.isArray(curve?.od600BlankCorrected) && curve.od600BlankCorrected) ||
         (Array.isArray(curve?.od600_raw) && curve.od600_raw) ||
+        (Array.isArray(curve?.od600Raw) && curve.od600Raw) ||
         []
       const len = Math.min(timeRaw.length, valsRaw.length)
       const timesMin: number[] = []
@@ -485,13 +523,21 @@ function computeCurveParameters(
   const timesH = curve.timesMin.map((t) => t / 60)
   const odPos = curve.values.map((v) => Math.max(MIN_OD, v))
   const lnOd = odPos.map((v) => Math.log(v))
-  const muSeries = slidingMu(timesH, lnOd, 7)
+  const muWindow = 7
+  const muSeries = slidingMu(timesH, lnOd, muWindow, 'centered', timesH.length >= muWindow)
+  const muSeriesLag = slidingMu(timesH, lnOd, 7, 'trailing', false)
   const logStartH = curve.logPhase ? curve.logPhase.startMin / 60 : null
   const logEndH = curve.logPhase ? curve.logPhase.endMin / 60 : null
 
-  const muCandidates = muSeries.filter(
-    (pt) => pt.mu != null && (!logStartH || !logEndH || (pt.t >= logStartH && pt.t <= logEndH)),
-  )
+  const hasLogPhase =
+    logStartH != null &&
+    logEndH != null &&
+    Number.isFinite(logStartH) &&
+    Number.isFinite(logEndH) &&
+    logEndH >= logStartH
+  const inLogPhase = (t: number) => !hasLogPhase || (t >= (logStartH as number) && t <= (logEndH as number))
+
+  const muCandidates = muSeries.filter((pt) => pt.mu != null && inLogPhase(pt.t))
   const muValues = muCandidates.map((pt) => pt.mu as number)
   const muMax =
     muValues.length >= 5
@@ -504,22 +550,22 @@ function computeCurveParameters(
   const thresholdMu = muMax ? 0.1 * muMax : null
   const firstTime = timesH[0] ?? 0
   let lambdaThreshold: number | null = null
-  if (thresholdMu != null && thresholdMu > 0 && muSeries.length) {
-    for (let i = 0; i < muSeries.length; i += 1) {
-      const win = muSeries.slice(i, i + 3)
+  if (thresholdMu != null && thresholdMu > 0 && muSeriesLag.length) {
+    for (let i = 0; i < muSeriesLag.length; i += 1) {
+      const win = muSeriesLag.slice(i, i + 3)
       if (win.length < 3) break
       if (win.every((pt) => pt.mu != null && (pt.mu as number) >= thresholdMu)) {
-        lambdaThreshold = (muSeries[i]?.t ?? firstTime) - firstTime
+        lambdaThreshold = Math.max(0, (muSeriesLag[i]?.t ?? firstTime) - firstTime)
         break
       }
     }
   }
 
-  const bestMu = muSeries.reduce<{ mu: number; t: number }>(
-    (acc, pt) => {
-      if (pt.mu != null && pt.mu > acc.mu) return { mu: pt.mu, t: pt.t }
-      return acc
-    },
+  const candidatesForInflection = muSeries.filter((pt) => pt.mu != null && inLogPhase(pt.t))
+  const candidatesFallback = muSeries.filter((pt) => pt.mu != null)
+  const bestPool = candidatesForInflection.length ? candidatesForInflection : candidatesFallback
+  const bestMu = bestPool.reduce<{ mu: number; t: number }>(
+    (acc, pt) => (pt.mu != null && pt.mu > acc.mu ? { mu: pt.mu, t: pt.t } : acc),
     { mu: Number.NEGATIVE_INFINITY, t: timesH[0] ?? 0 },
   )
   const tInflection = Number.isFinite(bestMu.mu) ? bestMu.t : null

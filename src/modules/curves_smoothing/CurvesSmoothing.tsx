@@ -18,7 +18,15 @@ import { generateDistinctColors, hexToHsl, hslToHex } from '@/utils/colors'
 import { loess, type NumericPoint, type LoessDiagnostics } from '@/utils/loess'
 import { downloadBlob, sanitizeFileName, elementToPngBlob } from '@/utils/export'
 import { useApp, type SharedSmoothedContext } from '@/state/store'
-import type { LogPhaseSelection, SampleCurvesExportRecord, SmoothedCurvesPayload, WellCurveExportRecord } from '@/types'
+import type {
+  LogPhasePoint,
+  LogPhaseSelection,
+  MuMaxWindowAnnotation,
+  ReplicateLogPhaseSelection,
+  SampleCurvesExportRecord,
+  SmoothedCurvesPayload,
+  WellCurveExportRecord,
+} from '@/types'
 import { detectLogPhase, LOG_PHASE_DEFAULTS, type LogPhaseDetectionOptions } from '@/utils/logPhase'
 
 interface SampleWellSeries {
@@ -26,6 +34,8 @@ interface SampleWellSeries {
   replicate: number
   color: string
   points: SeriesPoint[]
+  rawPoints: NumericPoint[]
+  smoothedPoints?: NumericPoint[]
 }
 
 interface LoessState {
@@ -47,6 +57,25 @@ interface BlankedAssignmentsPayload {
   createdAt?: string
   blanked?: boolean
   assignments?: AssignmentEntry[]
+}
+
+interface ReplicateLogPhaseEstimate {
+  sample: string
+  well: string
+  replicate: number
+  start: number
+  end: number
+}
+
+interface MuMaxWindowComputation {
+  muMax: number | null
+  window?: {
+    start: number
+    end: number
+    windowSize: number
+    slope: number
+    points: LogPhasePoint[]
+  }
 }
 
 type LegendEntry = { id: string; label: string; color: string; hidden?: boolean; kind?: 'series' | 'excluded' }
@@ -233,8 +262,9 @@ function PlotControlsSection({
 }
 
 const DEFAULT_COLOR = '#2563eb'
-const DEFAULT_SPAN = '60'
-const DEFAULT_SPAN_NUM = Number(DEFAULT_SPAN) || 60
+const DEFAULT_SPAN = '15'
+const DEFAULT_SPAN_NUM = Number(DEFAULT_SPAN) || 15
+const TIME_BUCKET_TOLERANCE_MIN = 1
 
 function safeNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value
@@ -277,6 +307,41 @@ function replicateColor(base: string, replicate: number): string {
   if (idx === 1) return hslToHex(h, Math.min(100, s + 5), Math.min(100, l + 8))
   if (idx === 2) return hslToHex(h, Math.max(0, s - 6), Math.max(0, l - 10))
   return hslToHex((h + 12) % 360, s, l)
+}
+
+function toNumericPoints(points: Array<{ x: unknown; y: unknown }> | null | undefined): NumericPoint[] {
+  if (!points?.length) return []
+  return points
+    .map((point) => ({
+      x: Number(point.x ?? NaN),
+      y: Number(point.y ?? NaN),
+    }))
+    .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
+    .sort((a, b) => a.x - b.x)
+}
+
+function mergeNearbyTimePoints(points: NumericPoint[], toleranceMin = TIME_BUCKET_TOLERANCE_MIN): NumericPoint[] {
+  if (!points.length) return []
+  const sorted = [...points].sort((a, b) => a.x - b.x)
+  const buckets: Array<{ points: NumericPoint[] }> = []
+  for (const point of sorted) {
+    const lastBucket = buckets[buckets.length - 1]
+    const lastPoint = lastBucket?.points[lastBucket.points.length - 1]
+    if (!lastBucket || !lastPoint || Math.abs(point.x - lastPoint.x) > toleranceMin) {
+      buckets.push({ points: [point] })
+      continue
+    }
+    lastBucket.points.push(point)
+  }
+  return buckets.map((bucket) => {
+    const count = bucket.points.length || 1
+    const sumX = bucket.points.reduce((acc, point) => acc + point.x, 0)
+    const sumY = bucket.points.reduce((acc, point) => acc + point.y, 0)
+    return {
+      x: sumX / count,
+      y: sumY / count,
+    }
+  })
 }
 
 function buildCurvesFromEntry(entry?: AssignmentEntry | null): SampleCurveState[] {
@@ -335,9 +400,11 @@ function buildCurvesFromEntry(entry?: AssignmentEntry | null): SampleCurveState[
         replicate: Number(replicate) || 1,
         color: replicateColor(sampleEntry.color, Number(replicate) || 1),
         points: [],
+        rawPoints: [],
       }
       sampleEntry.wells.push(wellEntry)
     }
+    wellEntry.rawPoints.push({ x: timeMin, y: value })
     wellEntry.points.push({
       x: timeMin,
       y: value,
@@ -347,10 +414,13 @@ function buildCurvesFromEntry(entry?: AssignmentEntry | null): SampleCurveState[
   })
 
   const samples = Array.from(sampleMap.values()).map<SampleCurveState>((entry) => {
-    entry.wells.forEach((well) => well.points.sort((a, b) => a.x - b.x))
-    const aggregated = entry.wells
-      .flatMap((well) => well.points.map((p) => ({ x: p.x, y: p.y })))
-      .sort((a, b) => a.x - b.x)
+    entry.wells.forEach((well) => {
+      well.points.sort((a, b) => a.x - b.x)
+      well.rawPoints = toNumericPoints(well.rawPoints)
+    })
+    const aggregated = mergeNearbyTimePoints(
+      entry.wells.flatMap((well) => (well.rawPoints?.length ? well.rawPoints : toNumericPoints(well.points)))
+    )
     return {
       sample: entry.sample,
       color: entry.color,
@@ -381,24 +451,31 @@ function buildCurvesFromSmoothed(payload: SmoothedCurvesPayload | null | undefin
       .filter((entry) => entry.sample === sample.sample)
       .forEach((entry) => {
         const timeRaw = Array.isArray(entry.time_min) ? entry.time_min : []
-        const valsRaw =
-          (Array.isArray(entry.od600_smoothed) && entry.od600_smoothed) ||
+        const rawVals =
           (Array.isArray(entry.od600_blank_corrected) && entry.od600_blank_corrected) ||
           (Array.isArray(entry.od600_raw) && entry.od600_raw) ||
+          (Array.isArray(entry.od600_smoothed) && entry.od600_smoothed) ||
           []
-        const len = Math.min(timeRaw.length, valsRaw.length)
-        const pts: NumericPoint[] = []
-        for (let i = 0; i < len; i += 1) {
-          const t = Number(timeRaw[i] ?? NaN)
-          const v = Number(valsRaw[i] ?? NaN)
-          if (!Number.isFinite(t) || !Number.isFinite(v)) continue
-          pts.push({ x: t, y: v })
-        }
+        const smoothedVals = Array.isArray(entry.od600_smoothed) ? entry.od600_smoothed : []
+        const rawPoints = toNumericPoints(
+          Array.from({ length: Math.min(timeRaw.length, rawVals.length) }, (_, i) => ({ x: timeRaw[i], y: rawVals[i] }))
+        )
+        const smoothedPoints = toNumericPoints(
+          Array.from({ length: Math.min(timeRaw.length, smoothedVals.length) }, (_, i) => ({ x: timeRaw[i], y: smoothedVals[i] }))
+        )
+        const fallbackPoints = rawPoints.length ? rawPoints : smoothedPoints
         wellsFromPayload[entry.well] = {
           well: entry.well,
           replicate: entry.replicate ?? 1,
           color: sample.color,
-          points: pts.sort((a, b) => a.x - b.x),
+          points: fallbackPoints.map((pt, index) => ({
+            x: pt.x,
+            y: pt.y,
+            id: `${sample.sample}|${entry.well}|${pt.x.toFixed(6)}|${index}`,
+            meta: { sample: sample.sample, well: entry.well, replicate: entry.replicate ?? 1 },
+          })),
+          rawPoints: fallbackPoints,
+          smoothedPoints: smoothedPoints.length ? smoothedPoints : undefined,
         }
       })
 
@@ -412,6 +489,7 @@ function buildCurvesFromSmoothed(payload: SmoothedCurvesPayload | null | undefin
           replicate: well.replicate ?? 1,
           color: sample.color,
           points: [],
+          rawPoints: [],
         }
       })
     } else {
@@ -424,10 +502,12 @@ function buildCurvesFromSmoothed(payload: SmoothedCurvesPayload | null | undefin
     }))
     const rawPoints =
       history?.[0]?.points?.length
-        ? history[0].points
-        : Object.values(wellsFromPayload)
-            .flatMap((well) => well.points)
-            .sort((a, b) => a.x - b.x)
+        ? toNumericPoints(history[0].points)
+        : mergeNearbyTimePoints(
+            Object.values(wellsFromPayload).flatMap((well) =>
+              well.smoothedPoints?.length ? well.smoothedPoints : well.rawPoints
+            )
+          )
 
     return {
       sample: sample.sample,
@@ -518,14 +598,19 @@ function buildSampleCurvesExport(curves: SampleCurveState[]): SampleCurvesExport
 function buildWellCurvesExport(curves: SampleCurveState[]): WellCurveExportRecord[] {
   return curves.flatMap((curve) => {
     return (curve.wells ?? []).map((well) => {
-      const time_min = (well.points ?? []).map((p) => Number(p.x ?? 0))
-      const od600_blank_corrected = (well.points ?? []).map((p) => Number(p.y ?? 0))
+      const rawPoints = well.rawPoints?.length ? toNumericPoints(well.rawPoints) : toNumericPoints(well.points)
+      const smoothedPoints = well.smoothedPoints?.length ? toNumericPoints(well.smoothedPoints) : []
+      const sourcePoints = rawPoints.length ? rawPoints : smoothedPoints
+      const time_min = sourcePoints.map((p) => Number(p.x ?? 0))
+      const od600_blank_corrected = rawPoints.length ? rawPoints.map((p) => Number(p.y ?? 0)) : undefined
+      const od600_smoothed = smoothedPoints.length ? smoothedPoints.map((p) => Number(p.y ?? 0)) : undefined
       return {
         sample: curve.sample,
         well: well.well,
         replicate: well.replicate,
         time_min,
         od600_blank_corrected,
+        od600_smoothed,
       }
     })
   })
@@ -543,9 +628,29 @@ function cloneLogPhasePoints(points?: LogPhaseSelection['points']): LogPhaseSele
 }
 
 function cloneLogPhaseEntry(entry: LogPhaseSelection): LogPhaseSelection {
+  const cloneWindow = (window?: MuMaxWindowAnnotation): MuMaxWindowAnnotation | undefined => {
+    if (!window) return undefined
+    return {
+      start: Number(window.start),
+      end: Number(window.end),
+      windowSize: Number(window.windowSize),
+      slope: Number(window.slope),
+      points: cloneLogPhasePoints(window.points),
+    }
+  }
   return {
     ...entry,
     points: cloneLogPhasePoints(entry.points),
+    muMax: entry.muMax == null ? entry.muMax : Number(entry.muMax),
+    muMaxWindow: cloneWindow(entry.muMaxWindow),
+    replicateLogPhases: entry.replicateLogPhases?.map((rep) => ({
+      ...rep,
+      start: Number(rep.start),
+      end: Number(rep.end),
+      points: cloneLogPhasePoints(rep.points),
+      muMax: rep.muMax == null ? rep.muMax : Number(rep.muMax),
+      muMaxWindow: cloneWindow(rep.muMaxWindow),
+    })),
   }
 }
 
@@ -578,6 +683,89 @@ function collectLogPhasePointsInRange(
       od600: Number(point.y),
     }))
   return subset.length ? subset : undefined
+}
+
+function linearRegressionSlope(xs: number[], ys: number[]): number | null {
+  const n = Math.min(xs.length, ys.length)
+  if (n < 2) return null
+  const meanX = xs.slice(0, n).reduce((acc, value) => acc + value, 0) / n
+  const meanY = ys.slice(0, n).reduce((acc, value) => acc + value, 0) / n
+  let sxx = 0
+  let sxy = 0
+  for (let i = 0; i < n; i += 1) {
+    const dx = xs[i] - meanX
+    sxx += dx * dx
+    sxy += dx * (ys[i] - meanY)
+  }
+  if (!(sxx > 0)) return null
+  const slope = sxy / sxx
+  return Number.isFinite(slope) ? slope : null
+}
+
+function computeMuMaxWindowInRange(
+  points: NumericPoint[],
+  range: { start: number; end: number } | null | undefined,
+  windowSize: number
+): MuMaxWindowComputation {
+  if (!points?.length || !range) return { muMax: null }
+  const start = Math.min(range.start, range.end)
+  const end = Math.max(range.start, range.end)
+  if (!Number.isFinite(start) || !Number.isFinite(end) || !(end > start)) return { muMax: null }
+  const normalizedWindow = Math.max(2, Math.round(windowSize))
+  const inRange = points
+    .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y) && point.x >= start && point.x <= end && point.y > 0)
+    .sort((a, b) => a.x - b.x)
+  if (inRange.length < normalizedWindow) return { muMax: null }
+
+  let bestSlope = Number.NEGATIVE_INFINITY
+  let bestStart = -1
+  let bestEnd = -1
+  let bestPoints: LogPhasePoint[] = []
+
+  for (let i = 0; i <= inRange.length - normalizedWindow; i += 1) {
+    const window = inRange.slice(i, i + normalizedWindow)
+    const xsHours = window.map((point) => point.x / 60)
+    const ysLn = window.map((point) => Math.log(point.y))
+    const slope = linearRegressionSlope(xsHours, ysLn)
+    if (slope == null) continue
+    if (slope > bestSlope) {
+      bestSlope = slope
+      bestStart = window[0].x
+      bestEnd = window[window.length - 1].x
+      bestPoints = window.map((point) => ({
+        t_min: Number(point.x),
+        od600: Number(point.y),
+      }))
+    }
+  }
+
+  if (!Number.isFinite(bestSlope) || bestStart < 0 || bestEnd < 0 || !bestPoints.length) {
+    return { muMax: null }
+  }
+
+  return {
+    muMax: bestSlope,
+    window: {
+      start: bestStart,
+      end: bestEnd,
+      windowSize: normalizedWindow,
+      slope: bestSlope,
+      points: bestPoints,
+    },
+  }
+}
+
+function toMuMaxWindowAnnotation(
+  window: MuMaxWindowComputation['window'] | undefined
+): MuMaxWindowAnnotation | undefined {
+  if (!window) return undefined
+  return {
+    start: window.start,
+    end: window.end,
+    windowSize: window.windowSize,
+    slope: window.slope,
+    points: window.points.length ? window.points.map((point) => ({ ...point })) : undefined,
+  }
 }
 
 function annotateSmoothedSamples(
@@ -684,14 +872,19 @@ export default function CurvesSmoothing() {
   const [curves, setCurves] = useState<SampleCurveState[]>([])
   const [selectedSamples, setSelectedSamples] = useState<string[]>([])
   const [spanInput, setSpanInput] = useState<string>(DEFAULT_SPAN)
-  const [degree, setDegree] = useState<1 | 2>(1)
+  const [degree, setDegree] = useState<1 | 2>(2)
   const [robustPasses, setRobustPasses] = useState<number>(3)
-  const [combinedUncertainty, setCombinedUncertainty] = useState<'none' | 'pointwise' | 'simultaneous'>('pointwise')
+  type CombinedSpreadMode = 'none' | 'sd-area' | 'sd-errorbars' | 'sem-area' | 'sem-errorbars'
+  const [combinedSpread, setCombinedSpread] = useState<CombinedSpreadMode>('sd-area')
+  // Backward-compatible alias (some UI code referenced "combinedUncertainty").
+  const combinedUncertainty = combinedSpread
+  const setCombinedUncertainty = setCombinedSpread
   const [maxRefinements, setMaxRefinements] = useState<number>(3)
   const [convergenceTol, setConvergenceTol] = useState<number>(0.0001)
   const [status, setStatus] = useState<string>('')
   const [filename, setFilename] = useState<string>('')
   const [combinedShowPoints, setCombinedShowPoints] = useState<boolean>(true)
+  const [combinedShowReplicateCurves, setCombinedShowReplicateCurves] = useState<boolean>(false)
   const [logShowPoints, setLogShowPoints] = useState<boolean>(true)
   const [chartResetKey, setChartResetKey] = useState<number>(0)
   const [logChartResetKey, setLogChartResetKey] = useState<number>(0)
@@ -735,6 +928,7 @@ export default function CurvesSmoothing() {
   )
   const [loessProgress, setLoessProgress] = useState<number | null>(null)
   const [autoWindowSize, setAutoWindowSize] = useState<string>(String(LOG_PHASE_DEFAULTS.windowSize))
+  const [muMaxWindowSizeInput, setMuMaxWindowSizeInput] = useState<string>('5')
   const [autoR2Min, setAutoR2Min] = useState<string>(String(LOG_PHASE_DEFAULTS.r2Min))
   const [autoOdMin, setAutoOdMin] = useState<string>(String(LOG_PHASE_DEFAULTS.odMin))
   const [autoFracKMax, setAutoFracKMax] = useState<string>(String(LOG_PHASE_DEFAULTS.fracKMax))
@@ -1013,7 +1207,6 @@ export default function CurvesSmoothing() {
   useEffect(() => {
     if (!curves.length) {
       setSmoothedPayload(null)
-      setSharedSmoothed(null)
       return
     }
     const payload = buildSmoothedPayload(
@@ -1028,12 +1221,9 @@ export default function CurvesSmoothing() {
     )
     if (!payload) {
       setSmoothedPayload(null)
-      setSharedSmoothed(null)
       return
     }
     setSmoothedPayload(payload)
-    const shared = buildSharedContext(payload)
-    setSharedSmoothed(shared)
   }, [
     activeEntry,
     activeEntryIndex,
@@ -1044,10 +1234,8 @@ export default function CurvesSmoothing() {
     degree,
     filename,
       logPhaseList,
-      buildSharedContext,
     sampleCurvesExport,
     wellCurvesExport,
-    setSharedSmoothed,
     spanInput,
   ])
 
@@ -1082,6 +1270,10 @@ export default function CurvesSmoothing() {
       muRelMax,
     }
   }, [autoWindowSize, autoR2Min, autoOdMin, autoFracKMax, autoMuRelMin, autoMuRelMax])
+  const muMaxWindowSize = useMemo(
+    () => Math.max(2, Math.round(parsePositiveNumber(muMaxWindowSizeInput, 5))),
+    [muMaxWindowSizeInput]
+  )
   const primaryLogSample = useMemo(() => {
     if (!selectedSamples.length) return ''
     const available = new Set(curves.map((curve) => curve.sample))
@@ -1161,10 +1353,128 @@ export default function CurvesSmoothing() {
         },
       ]
     : undefined
+  const replicateLogPhasesBySample = useMemo<Record<string, ReplicateLogPhaseEstimate[]>>(() => {
+    const result: Record<string, ReplicateLogPhaseEstimate[]> = {}
+    curves.forEach((curve) => {
+      const entries: ReplicateLogPhaseEstimate[] = []
+      ;(curve.wells ?? []).forEach((well, index) => {
+        const smoothed = well.smoothedPoints?.length
+          ? well.smoothedPoints
+          : toNumericPoints(well.rawPoints?.length ? well.rawPoints : well.points)
+        if (!smoothed.length) return
+        const detection = detectLogPhase(smoothed, logDetectionOptions)
+        if (!detection.indices.length || detection.startTime == null || detection.endTime == null) return
+        entries.push({
+          sample: curve.sample,
+          well: well.well,
+          replicate: Number.isFinite(Number(well.replicate)) ? Number(well.replicate) : index + 1,
+          start: detection.startTime,
+          end: detection.endTime,
+        })
+      })
+      if (entries.length) result[curve.sample] = entries
+    })
+    return result
+  }, [curves, logDetectionOptions])
+  const activeReplicateLogPhases = useMemo(
+    () => (primaryLogSample ? replicateLogPhasesBySample[primaryLogSample] ?? [] : []),
+    [primaryLogSample, replicateLogPhasesBySample],
+  )
+  const replicateOutsideHighlightBands = useMemo(() => {
+    if (!highlightRange || !activeReplicateLogPhases.length) return []
+    const sampleStart = highlightRange.start
+    const sampleEnd = highlightRange.end
+    const intervals: Array<{ start: number; end: number }> = []
+    activeReplicateLogPhases.forEach((phase) => {
+      const start = Math.min(phase.start, phase.end)
+      const end = Math.max(phase.start, phase.end)
+      if (!Number.isFinite(start) || !Number.isFinite(end) || !(end > start)) return
+      if (end <= sampleStart || start >= sampleEnd) {
+        intervals.push({ start, end })
+        return
+      }
+      if (start < sampleStart) intervals.push({ start, end: sampleStart })
+      if (end > sampleEnd) intervals.push({ start: sampleEnd, end })
+    })
+    if (!intervals.length) return []
+    intervals.sort((a, b) => a.start - b.start)
+    const merged: Array<{ start: number; end: number }> = []
+    intervals.forEach((interval) => {
+      const last = merged[merged.length - 1]
+      if (!last || interval.start > last.end) {
+        merged.push({ ...interval })
+        return
+      }
+      last.end = Math.max(last.end, interval.end)
+    })
+    return merged.map((interval) => ({
+      start: interval.start,
+      end: interval.end,
+      color: '#f97316',
+      opacity: 0.22,
+    }))
+  }, [activeReplicateLogPhases, highlightRange])
+  const combinedXBands = useMemo(() => {
+    const base = highlightBands ? [...highlightBands] : []
+    if (replicateOutsideHighlightBands.length) {
+      replicateOutsideHighlightBands.forEach((band) => base.push(band))
+    }
+    return base.length ? base : undefined
+  }, [highlightBands, replicateOutsideHighlightBands])
+  const logPhasesWithMuBySample = useMemo<Record<string, LogPhaseSelection>>(() => {
+    const result: Record<string, LogPhaseSelection> = {}
+    curves.forEach((curve) => {
+      const phase = logPhases[curve.sample]
+      if (!phase) return
+      const latestState = curve.history?.[curve.history.length - 1]
+      const samplePoints = latestState?.points?.length ? toNumericPoints(latestState.points) : []
+      const phaseRange = { start: phase.start, end: phase.end }
+      const sampleMu = computeMuMaxWindowInRange(samplePoints, phaseRange, muMaxWindowSize)
+      const samplePhasePoints =
+        collectLogPhasePointsInRange(samplePoints, phaseRange) ?? cloneLogPhasePoints(phase.points)
+
+      const replicatePhaseEntries: ReplicateLogPhaseSelection[] = []
+      const replicatePhases = replicateLogPhasesBySample[curve.sample] ?? []
+      replicatePhases.forEach((replicatePhase) => {
+        const well =
+          curve.wells.find((entry) => entry.well === replicatePhase.well) ??
+          curve.wells.find((entry) => entry.replicate === replicatePhase.replicate)
+        if (!well) return
+        const repPoints = well.smoothedPoints?.length
+          ? toNumericPoints(well.smoothedPoints)
+          : toNumericPoints(well.rawPoints?.length ? well.rawPoints : well.points)
+        const repRange = { start: replicatePhase.start, end: replicatePhase.end }
+        const repMu = computeMuMaxWindowInRange(repPoints, repRange, muMaxWindowSize)
+        const repPhasePoints = collectLogPhasePointsInRange(repPoints, repRange)
+        replicatePhaseEntries.push({
+          well: replicatePhase.well,
+          replicate: replicatePhase.replicate,
+          start: replicatePhase.start,
+          end: replicatePhase.end,
+          points: repPhasePoints?.length ? repPhasePoints : undefined,
+          muMax: repMu.muMax,
+          muMaxWindow: toMuMaxWindowAnnotation(repMu.window),
+        })
+      })
+
+      result[curve.sample] = {
+        ...phase,
+        points: samplePhasePoints?.length ? samplePhasePoints : undefined,
+        muMax: sampleMu.muMax,
+        muMaxWindow: toMuMaxWindowAnnotation(sampleMu.window),
+        replicateLogPhases: replicatePhaseEntries.length ? replicatePhaseEntries : undefined,
+      }
+    })
+    return result
+  }, [curves, logPhases, muMaxWindowSize, replicateLogPhasesBySample])
+  const activeLogPhaseWithMu = useMemo(
+    () => (primaryLogSample ? logPhasesWithMuBySample[primaryLogSample] : undefined),
+    [primaryLogSample, logPhasesWithMuBySample],
+  )
   const logLineSeries = useMemo<Series[]>(
     () => {
       if (!activeLogCurve || !latestLogHistory || !hasSmoothedLogHistory) return []
-      return [
+      const base: Series[] = [
         {
           name: `${activeLogCurve.sample} LOESS`,
           color: activeLogCurve.color,
@@ -1175,8 +1485,56 @@ export default function CurvesSmoothing() {
           })),
         },
       ]
+      if (combinedShowReplicateCurves) {
+        activeLogCurve.wells.forEach((well, index) => {
+          const points = well.smoothedPoints?.length
+            ? toNumericPoints(well.smoothedPoints)
+            : toNumericPoints(well.rawPoints?.length ? well.rawPoints : well.points)
+          if (!points.length) return
+          const replicateNo = Number.isFinite(Number(well.replicate)) ? Number(well.replicate) : index + 1
+          base.push({
+            name: `${activeLogCurve.sample} r${replicateNo} (${well.well}) LOESS`,
+            color: well.color,
+            strokeWidth: 1.3,
+            opacity: 0.78,
+            points: points.map((point, pointIndex) => ({
+              x: point.x,
+              y: Math.log(Math.max(1e-6, point.y)),
+              id: `${activeLogCurve.sample}|${well.well}|log-rep|${pointIndex}`,
+            })),
+          })
+        })
+      }
+      if (activeLogPhaseWithMu?.muMaxWindow?.points?.length) {
+        base.push({
+          name: `${activeLogCurve.sample} muMax window`,
+          color: '#dc2626',
+          strokeWidth: 4.6,
+          points: activeLogPhaseWithMu.muMaxWindow.points.map((point, index) => ({
+            x: point.t_min,
+            y: Math.log(Math.max(1e-6, point.od600)),
+            id: `${activeLogCurve.sample}|mumax|${index}`,
+          })),
+        })
+      }
+      if (combinedShowReplicateCurves && activeLogPhaseWithMu?.replicateLogPhases?.length) {
+        activeLogPhaseWithMu.replicateLogPhases.forEach((entry) => {
+          if (!entry.muMaxWindow?.points?.length) return
+          base.push({
+            name: `${activeLogCurve.sample} r${entry.replicate} muMax window`,
+            color: '#f97316',
+            strokeWidth: 3.4,
+            points: entry.muMaxWindow.points.map((point, index) => ({
+              x: point.t_min,
+              y: Math.log(Math.max(1e-6, point.od600)),
+              id: `${activeLogCurve.sample}|r${entry.replicate}|mumax|${index}`,
+            })),
+          })
+        })
+      }
+      return base
     },
-    [activeLogCurve, latestLogHistory, hasSmoothedLogHistory]
+    [activeLogCurve, latestLogHistory, hasSmoothedLogHistory, activeLogPhaseWithMu, combinedShowReplicateCurves]
   )
   const logScatterSeries = useMemo<Series[]>(
     () => {
@@ -1317,20 +1675,7 @@ export default function CurvesSmoothing() {
       'curves'
     const safeBase = sanitizeFileName(baseSource.replace(/\.[^/.]+$/, '') || 'curves')
     const exportName = `${safeBase}-log-phases.json`
-    const logPhasesWithPoints = logPhaseList.map((entry) => {
-      const sample = smoothedPayload.samples.find((item) => item.sample === entry.sample)
-      const latest = sample?.history?.[sample.history.length - 1]
-      const start = Math.min(entry.start, entry.end)
-      const end = Math.max(entry.start, entry.end)
-      const points =
-        latest?.points
-          ?.filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y) && point.x >= start && point.x <= end)
-          .map((point) => ({
-            t_min: Number(point.x),
-            od600: Number(point.y),
-          })) ?? []
-      return points.length ? { ...entry, points } : { ...entry, points: undefined }
-    })
+    const logPhasesWithPoints = logPhaseList.map((entry) => logPhasesWithMuBySample[entry.sample] ?? entry)
 
     const sanitizedRows =
       activeEntry.dataset.rows?.map((row: any) => {
@@ -1368,24 +1713,75 @@ export default function CurvesSmoothing() {
     })
     downloadBlob(blob, exportName)
     setStatus(`[FILE] Wyeksportowano ${exportName}`)
-  }, [activeEntry, activeEntryIndex, assignments, blankedInfo, filename, logPhaseList, logPhases, sampleCurvesExport, smoothedPayload])
+  }, [activeEntry, activeEntryIndex, assignments, blankedInfo, filename, logPhaseList, logPhasesWithMuBySample, sampleCurvesExport, smoothedPayload])
 
-  const handleSendToParameters = useCallback(() => {
-    const shared = buildSharedContext(smoothedPayload)
+  const handleSendToParameters = useCallback((): boolean => {
+    if (isLoessRunning) {
+      setStatus('[WARN] Poczekaj aż LOESS się zakończy przed przejściem dalej.')
+      return false
+    }
+    if (!curves.length) {
+      setStatus('[WARN] Brak danych do przesłania do Parameters.')
+      return false
+    }
+    const hasAnySmoothing = curves.some((curve) => (curve.history?.length ?? 0) > 1)
+    if (!hasAnySmoothing) {
+      setStatus('[WARN] Najpierw wykonaj wygładzanie krzywych (LOESS).')
+      return false
+    }
+    const missingLogPhase = curves
+      .map((curve) => curve.sample)
+      .filter((sample) => sample && !logPhases[sample])
+    if (missingLogPhase.length) {
+      const preview = missingLogPhase.slice(0, 6).join(', ')
+      const suffix = missingLogPhase.length > 6 ? ` (+${missingLogPhase.length - 6})` : ''
+      setStatus(`[WARN] Najpierw wyznacz fazę log dla: ${preview}${suffix}.`)
+      return false
+    }
+    const enrichedLogPhases = logPhaseList.map((entry) => logPhasesWithMuBySample[entry.sample] ?? entry)
+    const payloadForShare = buildSmoothedPayload(
+      curves,
+      activeMeta,
+      spanInput,
+      degree,
+      filename,
+      sampleCurvesExport,
+      wellCurvesExport,
+      enrichedLogPhases.length ? enrichedLogPhases : undefined,
+    )
+    const shared = buildSharedContext(payloadForShare)
     if (!shared) {
       setStatus('[WARN] Brak wygładzonych danych do przesłania do Parameters.')
-      return
+      return false
     }
     setSharedSmoothed(shared)
     setActiveTab('parameters')
     const count = Array.isArray(shared.rawPayload?.assignments) ? shared.rawPayload.assignments.length : 0
     setStatus(`[OK] Przekazano dane do Parameters (${count} assignment).`)
-  }, [buildSharedContext, setActiveTab, setSharedSmoothed, smoothedPayload])
+    return true
+  }, [
+    activeMeta,
+    buildSharedContext,
+    curves,
+    degree,
+    filename,
+    isLoessRunning,
+    logPhases,
+    logPhaseList,
+    logPhasesWithMuBySample,
+    sampleCurvesExport,
+    setActiveTab,
+    setSharedSmoothed,
+    spanInput,
+    wellCurvesExport,
+  ])
 
   const handleFileChange = useCallback(async (fileList: FileList | null) => {
     if (!fileList?.length) return
     const file = fileList[0]
     try {
+      // New upload should clear the previously committed payload for Parameters.
+      setSharedSmoothed(null)
       const text = await file.text()
       const payload = JSON.parse(text) as BlankedAssignmentsPayload
       if (!payload.assignments?.length) {
@@ -1422,10 +1818,12 @@ export default function CurvesSmoothing() {
       console.error(error)
       setStatus(`[ERR] Nie udaÅ‚o siÄ™ wczytaÄ‡ pliku: ${error?.message ?? String(error)}`)
     }
-  }, [])
+  }, [setSharedSmoothed])
 
   useEffect(() => {
     if (!autoAssignments || !autoAssignments.length) return
+    // New input from previous stage should clear the previously committed payload for Parameters.
+    setSharedSmoothed(null)
     setAssignments(autoAssignments)
     setActiveEntryIndex(0)
     const nextCurves = buildCurvesFromEntry(autoAssignments[0])
@@ -1445,7 +1843,7 @@ export default function CurvesSmoothing() {
         ? `[AUTO] Dane z Blank Correction (${nextCurves.length}/${expectedCount || nextCurves.length} pr\u00f3b).`
         : `[AUTO] Data from Blank Correction (${nextCurves.length}/${expectedCount || nextCurves.length} samples).`
     )
-  }, [autoAssignmentsKey])
+  }, [autoAssignmentsKey, setSharedSmoothed])
 
   useEffect(() => {
     if (curves.length || !sharedSmoothed?.smoothed?.samples?.length) return
@@ -1573,6 +1971,71 @@ export default function CurvesSmoothing() {
       }),
     [selectedCurves]
   )
+  const replicateLoessSeries: Series[] = useMemo(
+    () => {
+      if (!combinedShowReplicateCurves) return []
+      return selectedCurves.flatMap((curve) =>
+        curve.wells.flatMap((well, index) => {
+          const points = well.smoothedPoints?.length
+            ? well.smoothedPoints
+            : toNumericPoints(well.rawPoints?.length ? well.rawPoints : well.points)
+          if (!points.length) return []
+          const replicateNo = Number.isFinite(Number(well.replicate)) ? Number(well.replicate) : index + 1
+          return [
+            {
+              name: `${curve.sample} r${replicateNo} (${well.well})`,
+              color: well.color,
+              points: points.map((point, pointIndex) => ({
+                x: point.x,
+                y: point.y,
+                id: `${curve.sample}|${well.well}|smoothed|${pointIndex}`,
+              })),
+              strokeWidth: 1.3,
+              opacity: 0.78,
+            },
+          ]
+        })
+      )
+    },
+    [combinedShowReplicateCurves, selectedCurves]
+  )
+  const muMaxHighlightSeries: Series[] = useMemo(
+    () =>
+      selectedCurves.flatMap((curve) => {
+        const entry = logPhasesWithMuBySample[curve.sample]
+        if (!entry) return []
+        const out: Series[] = []
+        if (entry.muMaxWindow?.points?.length) {
+          out.push({
+            name: `${curve.sample} muMax window`,
+            color: '#dc2626',
+            strokeWidth: 4.6,
+            points: entry.muMaxWindow.points.map((point, index) => ({
+              x: point.t_min,
+              y: point.od600,
+              id: `${curve.sample}|mumax-window|${index}`,
+            })),
+          })
+        }
+        if (combinedShowReplicateCurves && entry.replicateLogPhases?.length) {
+          entry.replicateLogPhases.forEach((rep) => {
+            if (!rep.muMaxWindow?.points?.length) return
+            out.push({
+              name: `${curve.sample} r${rep.replicate} muMax window`,
+              color: '#f97316',
+              strokeWidth: 3.4,
+              points: rep.muMaxWindow.points.map((point, index) => ({
+                x: point.t_min,
+                y: point.od600,
+                id: `${curve.sample}|r${rep.replicate}|mumax-window|${index}`,
+              })),
+            })
+          })
+        }
+        return out
+      }),
+    [combinedShowReplicateCurves, logPhasesWithMuBySample, selectedCurves],
+  )
 
   const scatterSeries: Series[] = useMemo(
     () =>
@@ -1597,11 +2060,15 @@ export default function CurvesSmoothing() {
 
   const combinedLegendSource = useMemo(() => {
     const entries = [...loessSeries]
+    muMaxHighlightSeries.forEach((series) => entries.push(series))
+    if (combinedShowReplicateCurves) {
+      replicateLoessSeries.forEach((series) => entries.push(series))
+    }
     if (combinedShowPoints) {
       scatterSeries.forEach((series) => entries.push(series))
     }
     return entries
-  }, [combinedShowPoints, loessSeries, scatterSeries])
+  }, [combinedShowPoints, combinedShowReplicateCurves, loessSeries, muMaxHighlightSeries, replicateLoessSeries, scatterSeries])
   const combinedLegendSignature = useMemo(
     () => combinedLegendSource.map((s) => `${s.name}:${s.color}`).join('|'),
     [combinedLegendSource],
@@ -1632,8 +2099,11 @@ export default function CurvesSmoothing() {
     [combinedLegendEntries],
   )
   const visibleLoessSeries = useMemo(
-    () => loessSeries.filter((series) => !combinedHiddenIds.has(series.name)),
-    [loessSeries, combinedHiddenIds],
+    () =>
+      [...loessSeries, ...muMaxHighlightSeries, ...(combinedShowReplicateCurves ? replicateLoessSeries : [])].filter(
+        (series) => !combinedHiddenIds.has(series.name)
+      ),
+    [combinedShowReplicateCurves, loessSeries, muMaxHighlightSeries, replicateLoessSeries, combinedHiddenIds],
   )
   const visibleScatterSeries = useMemo(
     () => (combinedShowPoints ? scatterSeries.filter((series) => !combinedHiddenIds.has(series.name)) : []),
@@ -1723,53 +2193,9 @@ export default function CurvesSmoothing() {
   )
 
   const combinedBands = useMemo(() => {
-    if (combinedUncertainty === 'none') return []
+    if (combinedSpread === 'none') return []
 
-    const factorial = (n: number): number => {
-      if (n <= 1) return 1
-      let out = 1
-      for (let i = 2; i <= n; i += 1) out *= i
-      return out
-    }
-
-    const enumerateCounts = (n: number): Array<{ counts: number[]; weight: number }> => {
-      if (!Number.isFinite(n) || n <= 0) return []
-      const countsList: number[][] = []
-      const helper = (idx: number, remaining: number, acc: number[]) => {
-        if (idx === n - 1) {
-          countsList.push([...acc, remaining])
-          return
-        }
-        for (let k = 0; k <= remaining; k += 1) {
-          helper(idx + 1, remaining - k, [...acc, k])
-        }
-      }
-      helper(0, n, [])
-      const norm = Math.pow(n, n)
-      return countsList.map((counts) => {
-        const denom = counts?.reduce?.((acc, c) => acc * factorial(c), 1) ?? 1
-        const weight = (factorial(n) / denom) / norm
-        return { counts, weight }
-      })
-    }
-
-    const weightedPercentile = (values: number[], weights: number[], p: number): number => {
-      if (!values.length) return NaN
-      const paired = values
-        .map((v, i) => ({ v, w: weights[i] ?? 0 }))
-        .filter((item) => Number.isFinite(item.v) && item.w > 0)
-        .sort((a, b) => a.v - b.v)
-      if (!paired.length) return NaN
-      const total = paired.reduce((acc, item) => acc + item.w, 0)
-      if (!(total > 0)) return paired[Math.floor((p / 100) * paired.length)]?.v ?? NaN
-      const target = (p / 100) * total
-      let acc = 0
-      for (const item of paired) {
-        acc += item.w
-        if (acc >= target) return item.v
-      }
-      return paired[paired.length - 1].v
-    }
+    const metric = combinedSpread.startsWith('sem') ? 'sem' : 'sd'
 
     const evaluate = (points: NumericPoint[], xs: number[]): number[] => {
       if (!points.length) return xs.map(() => NaN)
@@ -1781,7 +2207,7 @@ export default function CurvesSmoothing() {
           const a = sorted[i]
           const b = sorted[i + 1]
           if (x >= a.x && x <= b.x) {
-            const t = (x - a.x) / (b.x - a.x)
+            const t = (x - a.x) / Math.max(1e-9, b.x - a.x)
             return a.y * (1 - t) + b.y * t
           }
         }
@@ -1789,11 +2215,10 @@ export default function CurvesSmoothing() {
       })
     }
 
-    const spanValue = Number(spanInput) || DEFAULT_SPAN_NUM
     const results = selectedCurves.map((curve) => {
       const wells = curve.wells ?? []
-      const wellCount = wells.length
-      if (wellCount < 2) return null
+      if (wells.length < 1) return null
+
       const grid = Array.from(
         new Set(
           wells.flatMap((w) => w.points.map((p) => Number(p.x ?? 0))).filter((v) => Number.isFinite(v)),
@@ -1801,124 +2226,71 @@ export default function CurvesSmoothing() {
       ).sort((a, b) => a - b)
       if (!grid.length) return null
 
-      const main = runLoessRefinement(curve.rawPoints, spanValue)
-      if (!main?.result?.points?.length) return null
-      const mainPred = evaluate(main.result.points, grid)
-      const resamples = enumerateCounts(wellCount)
-      if (!resamples.length) return null
-
-      const valuesByT = grid.map(() => [] as number[])
-      const weightsByT = grid.map(() => [] as number[])
-      const diffValues: number[] = []
-      const diffWeights: number[] = []
-
-      resamples.forEach(({ counts, weight }) => {
-        if (!(weight > 0)) return
-        const safeCounts = Array.isArray(counts) ? [...counts] : []
-        while (safeCounts.length < wellCount) safeCounts.push(0)
-        if (!safeCounts.length || safeCounts.every((c) => !c)) return
-        const pts: NumericPoint[] = []
-        safeCounts.forEach((rep, idx) => {
-          const wellPts = wells[idx]?.points ?? []
-          const copies = Math.max(0, Number(rep) || 0)
-          for (let k = 0; k < copies; k += 1) {
-            wellPts.forEach((p) => {
-              pts.push({ x: Number(p.x ?? 0), y: Number(p.y ?? 0) })
-            })
+      const perWellPreds = wells.map((well) => evaluate(well.points ?? [], grid))
+      const points = grid
+        .map((x, idx) => {
+          const values = perWellPreds
+            .map((row) => row?.[idx])
+            .filter((v) => Number.isFinite(v)) as number[]
+          if (!values.length) return null
+          const mean = values.reduce((acc, v) => acc + v, 0) / values.length
+          const variance =
+            values.length > 1
+              ? values.reduce((acc, v) => acc + (v - mean) ** 2, 0) / (values.length - 1)
+              : 0
+          const sd = Math.sqrt(Math.max(0, variance))
+          const sem = values.length > 0 ? sd / Math.sqrt(values.length) : 0
+          const delta = metric === 'sem' ? sem : sd
+          return {
+            x,
+            low: mean - delta,
+            high: mean + delta,
           }
         })
-        if (!pts.length) return
-        const resLoess = runLoessRefinement(pts, spanValue)
-        if (!resLoess?.result?.points?.length) return
-        const preds = evaluate(resLoess.result.points, grid)
-        preds.forEach((val, i) => {
-          valuesByT[i].push(val)
-          weightsByT[i].push(weight)
-        })
-        const maxDiff = preds.reduce((acc, val, i) => Math.max(acc, Math.abs(val - (mainPred[i] ?? 0))), 0)
-        diffValues.push(maxDiff)
-        diffWeights.push(weight)
-      })
+        .filter((p): p is { x: number; low: number; high: number } => Boolean(p))
 
-      let bandPoints: { x: number; low: number; high: number }[] = []
-      if (combinedUncertainty === 'pointwise') {
-        bandPoints = grid.map((x, idx) => {
-          const vals = valuesByT[idx]
-          const w = weightsByT[idx]
-          if (!vals.length) return { x, low: mainPred[idx] ?? NaN, high: mainPred[idx] ?? NaN }
-          const low = weightedPercentile(vals, w, 2.5)
-          const high = weightedPercentile(vals, w, 97.5)
-          return { x, low, high }
-        })
-      } else {
-        const c = weightedPercentile(diffValues, diffWeights, 95)
-        bandPoints = grid.map((x, idx) => ({
-          x,
-          low: (mainPred[idx] ?? 0) - c,
-          high: (mainPred[idx] ?? 0) + c,
-        }))
-      }
-
-      let filtered = bandPoints.filter(
-        (p) => Number.isFinite(p.low) && Number.isFinite(p.high) && Number.isFinite(p.x),
-      )
-
-      // Fallback: jeÅ›li bootstrap nie daÅ‚ nic sensownego, zrÃ³b proste SD po wellach na gridzie
-      if (!filtered.length) {
-        const perWellPreds = wells.map((well) => evaluate(well.points ?? [], grid))
-        if (perWellPreds.length >= 2) {
-          filtered = grid
-            .map((x, idx) => {
-              const values = perWellPreds
-                .map((row) => row?.[idx])
-                .filter((v) => Number.isFinite(v)) as number[]
-              if (values.length < 2) return null
-              const mean = values.reduce((acc, v) => acc + v, 0) / values.length
-              const variance =
-                values.length > 1
-                  ? values.reduce((acc, v) => acc + (v - mean) ** 2, 0) / (values.length - 1)
-                  : 0
-              const sd = Math.sqrt(Math.max(0, variance))
-              return {
-                x,
-                low: mean - sd,
-                high: mean + sd,
-              }
-            })
-            .filter((p): p is { x: number; low: number; high: number } => Boolean(p))
-        }
-      }
-
-      // Ostateczny fallback: pasmo z samej krzywej gÅ‚Ã³wnej (zero width), aby coÅ› pokazaÄ‡
-      if (!filtered.length) {
-        filtered = grid
-          .map((x, idx) => {
-            const base = mainPred[idx]
-            if (!Number.isFinite(base)) return null
-            return { x, low: base, high: base }
-          })
-          .filter((p): p is { x: number; low: number; high: number } => Boolean(p))
-      }
-
-      if (!filtered.length) return null
+      if (!points.length) return null
       return {
         name: curve.sample,
         color: curve.color,
-        points: filtered,
+        points,
       }
     })
 
-    return results.filter((b): b is { name: string; color: string; points: { x: number; low: number; high: number }[] } => Boolean(b))
-  }, [combinedUncertainty, selectedCurves, runLoessRefinement, spanInput])
+    return results.filter(
+      (b): b is { name: string; color: string; points: { x: number; low: number; high: number }[] } =>
+        Boolean(b),
+    )
+  }, [combinedSpread, selectedCurves])
+  const logBands = useMemo(() => {
+    if (combinedSpread === 'none') return []
+    return combinedBands
+      .map((band) => {
+        const points = band.points
+          .map((point) => ({
+            x: point.x,
+            low: Math.log(Math.max(1e-6, point.low)),
+            high: Math.log(Math.max(1e-6, point.high)),
+          }))
+          .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.low) && Number.isFinite(point.high))
+        if (!points.length) return null
+        return {
+          name: band.name,
+          color: band.color,
+          points,
+        }
+      })
+      .filter((band): band is { name: string; color: string; points: { x: number; low: number; high: number }[] } => Boolean(band))
+  }, [combinedBands, combinedSpread])
 
   const combinedBandWarning = useMemo(() => {
-    if (combinedUncertainty === 'none') return ''
+    if (combinedSpread === 'none') return ''
     if (!hasCurves) return ''
     const hasMultiWell = selectedCurves.some((curve) => (curve.wells?.length ?? 0) >= 2)
-    if (!hasMultiWell) return 'Pasma wymagają dołków/replikatów w próbie.'
-    if (!combinedBands.length) return 'Brak danych do pasma (sprawdź punkty lub span). Jeżeli pasmo się nie pojawia, używam fallbacku SD.'
+    if (!hasMultiWell) return isPl ? 'Rozrzut wymaga replikatow (min. 2) w probie.' : 'Spread requires replicates (min 2) in a sample.'
+    if (!combinedBands.length) return isPl ? 'Brak danych do rozrzutu.' : 'No data for spread.'
     return ''
-  }, [combinedUncertainty, hasCurves, selectedCurves, combinedBands.length])
+  }, [combinedSpread, combinedBands.length, hasCurves, isPl, selectedCurves])
 
 const applyLoess = useCallback(
   async (mode: 'selected' | 'all') => {
@@ -1952,14 +2324,52 @@ const applyLoess = useCallback(
           nextCurves.push(curve)
           continue
         }
-        const basePoints = curve.rawPoints?.length ? curve.rawPoints : curve.history[0]?.points ?? []
-        if (!basePoints.length) {
+        const smoothedWells = (curve.wells ?? []).map((well) => {
+          const baseWellPoints = toNumericPoints(well.rawPoints?.length ? well.rawPoints : well.points)
+          if (!baseWellPoints.length) {
+            return {
+              ...well,
+              points: [],
+              rawPoints: [],
+              smoothedPoints: [],
+            }
+          }
+          const refinement = runLoessRefinement(baseWellPoints, parsedSpan)
+          if (refinement) {
+            totalLoops += refinement.loops
+          }
+          const smoothedPoints = refinement?.result?.points
+            ? toNumericPoints(refinement.result.points)
+            : baseWellPoints
+          return {
+            ...well,
+            points: baseWellPoints.map((point, index) => ({
+              x: point.x,
+              y: point.y,
+              id: `${curve.sample}|${well.well}|raw|${point.x.toFixed(6)}|${index}`,
+              meta: { sample: curve.sample, well: well.well, replicate: well.replicate },
+            })),
+            rawPoints: baseWellPoints,
+            smoothedPoints,
+          }
+        })
+        const averagedPoints = mergeNearbyTimePoints(
+          smoothedWells.flatMap((well) =>
+            well.smoothedPoints?.length ? well.smoothedPoints : well.rawPoints
+          ),
+          TIME_BUCKET_TOLERANCE_MIN,
+        )
+        if (!averagedPoints.length) {
           nextCurves.push(curve)
           continue
         }
-        const refinement = runLoessRefinement(basePoints, parsedSpan)
+        const refinement = runLoessRefinement(averagedPoints, parsedSpan)
         if (!refinement) {
-          nextCurves.push(curve)
+          nextCurves.push({
+            ...curve,
+            wells: smoothedWells,
+            rawPoints: averagedPoints,
+          })
           continue
         }
         const result = refinement.result
@@ -1978,6 +2388,8 @@ const applyLoess = useCallback(
         const baseHistory = curve.history.length ? [...curve.history] : curve.history
         nextCurves.push({
           ...curve,
+          wells: smoothedWells,
+          rawPoints: averagedPoints,
           history: [...baseHistory, newState],
         })
         setLoessProgress(Math.min(100, Math.round((changed / totalTargets) * 100)))
@@ -2090,9 +2502,18 @@ const stepBack = useCallback(() => {
       !!(smoothedPayload?.logPhases && Object.keys(smoothedPayload.logPhases).length) ||
       logPhasesCount > 0
     if (!hasLogPhases) return
-    handleSendToParameters()
-    setAutoRun({ stage: 'done', error: null })
-  }, [autoRun, handleSendToParameters, isLoessRunning, setAutoRun, smoothedPayload, logPhasesCount])
+    const sent = handleSendToParameters()
+    setAutoRun(
+      sent
+        ? { stage: 'done', error: null }
+        : {
+            stage: 'error',
+            error: isPl
+              ? 'AUTO: nie udało się przejść do Parametrów (brak fazy log lub brak wygładzenia).'
+              : 'AUTO: could not proceed to Parameters (missing log phase / smoothing).',
+          },
+    )
+  }, [autoRun, handleSendToParameters, isLoessRunning, isPl, setAutoRun, smoothedPayload, logPhasesCount])
 
   const handleExportCurves = useCallback(() => {
     if (!activeEntry?.dataset) {
@@ -2117,6 +2538,9 @@ const stepBack = useCallback(() => {
       rows: sanitizedRows,
       sample_curves: sampleCurvesExport,
       well_curves: wellCurvesExport,
+      log_phases: logPhaseList.length
+        ? logPhaseList.map((entry) => ({ ...(logPhasesWithMuBySample[entry.sample] ?? entry) }))
+        : undefined,
     }
     const exportAssignments = assignments.map((entry, index) => {
       if (!entry) return entry
@@ -2144,7 +2568,7 @@ const stepBack = useCallback(() => {
     })
     downloadBlob(blob, fileName)
     setStatus(`[FILE] Wyeksportowano ${fileName}`)
-  }, [activeEntry, activeEntryIndex, assignments, blankedInfo, filename, sampleCurvesExport, wellCurvesExport])
+  }, [activeEntry, activeEntryIndex, assignments, blankedInfo, filename, logPhaseList, logPhasesWithMuBySample, sampleCurvesExport, wellCurvesExport])
 
   const infoHelp = isPl
     ? 'W przyszłości zostanie dodanych więcej algorytmów wygładzania. Ten etap jest kluczowy dla uzyskania niektórych z biologicznych parametrów wzrostu, do których będziesz miał dostęp w następnej karcie.'
@@ -2153,8 +2577,8 @@ const stepBack = useCallback(() => {
     ? 'W różnych okolicznościach inne algorytmy wygładzania mogą być bardziej odpowiednie. Inne algorytmy oraz zalecenia ich użycia zostaną dodane w przyszłości. Dla dobrego dopasowania polecam zmniejszyć wielkość okna (span) i zwiększyć liczbę iteracji odpornych na odchylenia (robust). Lokalny model liniowy zdaje się działać lepiej niż paraboliczny dla krzywych, które sprawdzałem.'
     : 'In different circumstances, other smoothing algorithms may be more appropriate. Other algorithms and recommendations for their use will be added in the future. For a good fit, I recommend decreasing the window size (span) and increasing the number of robust iterations. The local linear model seems to work better than the parabolic one for the curves I have tested.'
   const plotControlsHelp = isPl
-    ? 'Steruj tytulem, osiami i skala czcionki. Reset przywraca domyslny zoom/pan.'
-    : 'Control title, axes, and font scale. Reset restores the default zoom/pan.'
+    ? 'Kliklnij R na klawiaturze lub przycisk "Reset widoku" aby przywrócić domyślny widok. Możesz przesuwać wykres przytrzymując i przecigając lub go powiększać/zmniejszać za pomocą touchpada lub scrolla na myszy. Przytrzymanie i przeciągnięcie myszą na osiach liczbowych zmieni "rozdzielczość" wykresu. Przytrzymując shift i przeciągając myszą po wykresie zaznaczysz/odznaczysz wiele punktów na raz.'
+    : 'Press R on the keyboard or the "Reset View" button to restore the default view. You can pan the chart by holding and dragging, or zoom in/out using a trackpad or mouse scroll. Holding and dragging on the numeric axes will change the chart "resolution". Holding shift and dragging on the chart will select/deselect multiple points at once.'
   const combinedChartHelp = isPl
     ? 'Wykres wygładzonych krzywych z zoom/pan, legenda i eksportem PNG. Pelny ekran daje więcej miejsca na analize.'
     : 'Smoothed curves chart with zoom/pan, legend, and PNG export. Fullscreen gives more room to analyze.'
@@ -2168,10 +2592,10 @@ const stepBack = useCallback(() => {
     ? 'Sprawdź czy wygładzona krzywa jest dobrze dopasowana do danych i czy fazy log są poprawnie wykryte.'
     : 'Check if the smoothed curve is well-fitted to the data and if log phases are correctly detected.'
   const spanHelp = isPl
-    ? 'Wartość pomiędzy 0-1 oznacza procent punktów w oknie; liczba całkowita to długosc okna w punktach.'
+    ? 'Wartość pomiędzy 0-1 oznacza procent punktów w oknie; liczba całkowita to długość okna w punktach.'
     : 'A value between 0-1 is the fraction of points in the window; an integer is the window length in points.'
   const modelHelp = isPl
-    ? 'Stopien lokalnego wielomianu: 1 = linia, 2 = parabola.'
+    ? 'Stopień lokalnego wielomianu: 1 = linia, 2 = parabola.'
     : 'Degree of the local polynomial: 1 = line, 2 = parabola.'
   const robustHelp = isPl
     ? 'Liczba iteracji odpornych na odchylenia w trakcie wygładzania.'
@@ -2185,6 +2609,9 @@ const stepBack = useCallback(() => {
   const logWindowHelp = isPl
     ? 'Liczba punktów w oknie regresji liniowej podczas automatycznego wykrywania.'
     : 'Number of points in the linear regression window used for auto-detection.'
+  const logMuMaxWindowHelp = isPl
+    ? 'Liczba punktów w oknie przesuwanym wewnątrz adnotowanej fazy log do obliczenia μmax (największe nachylenie).'
+    : 'Number of points in the sliding window inside annotated log phase used to compute μmax (maximum slope).'
   const logR2Help = isPl
     ? 'Minimalny współczynnik R² wymagany dla dopasowania okna.'
     : 'Minimum R² required for the window fit.'
@@ -2346,25 +2773,37 @@ const stepBack = useCallback(() => {
                 {isPl ? 'Punkty danych' : 'Data points'}
               </span>
             </label>
-            <label className={`parameters-toggle ${combinedUncertainty !== 'none' ? 'is-on' : ''}`}>
+            <label
+              className={`parameters-toggle ${combinedShowReplicateCurves ? 'is-on' : ''}`}
+              title={
+                isPl
+                  ? 'Pokaż/ukryj wygładzone krzywe replikatów'
+                  : 'Show/hide smoothed replicate curves'
+              }
+            >
               <input
                 type="checkbox"
-                checked={combinedUncertainty !== 'none'}
-                onChange={(e) => setCombinedUncertainty(e.target.checked ? 'pointwise' : 'none')}
+                checked={combinedShowReplicateCurves}
+                onChange={() => setCombinedShowReplicateCurves((prev) => !prev)}
                 disabled={!hasCurves}
               />
               <span className="parameters-toggle__slider" aria-hidden />
-              <span className="parameters-toggle__label">{isPl ? 'Przedział ufności' : 'Bands'}</span>
+              <span className="parameters-toggle__label">
+                {isPl ? 'Krzywe replikatów' : 'Replicate curves'}
+              </span>
             </label>
             <div className="field small" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <label className="small">{isPl ? 'Typ' : 'Type'}</label>
+              <label className="small">{isPl ? 'Rozrzut' : 'Spread'}</label>
               <select
                 value={combinedUncertainty}
                 onChange={(e) => setCombinedUncertainty(e.target.value as any)}
-                disabled={!hasCurves || combinedUncertainty === 'none'}
+                disabled={!hasCurves}
               >
-                <option value="pointwise">{isPl ? 'Punktowy 95% CI' : 'Pointwise 95% CI'}</option>
-                <option value="simultaneous">{isPl ? '95% CI dla krzywej' : 'Simultaneous 95% band'}</option>
+                <option value="none">{isPl ? 'Brak' : 'None'}</option>
+                <option value="sd-area">{isPl ? 'SD (zacieniowanie)' : 'SD (shading)'}</option>
+                <option value="sd-errorbars">{isPl ? 'SD (errorbary)' : 'SD (error bars)'}</option>
+                <option value="sem-area">{isPl ? 'SEM (zacieniowanie)' : 'SEM (shading)'}</option>
+                <option value="sem-errorbars">{isPl ? 'SEM (errorbary)' : 'SEM (error bars)'}</option>
               </select>
             </div>
           </div>
@@ -2379,6 +2818,7 @@ const stepBack = useCallback(() => {
       combinedYLabel,
       combinedChartRef,
       combinedShowPoints,
+      combinedShowReplicateCurves,
       combinedUncertainty,
       copyPng,
       exportPng,
@@ -2388,6 +2828,7 @@ const stepBack = useCallback(() => {
       setCombinedFontScale,
       setCombinedLegendVisible,
       setCombinedShowPoints,
+      setCombinedShowReplicateCurves,
       setCombinedUncertainty,
       setCombinedTitle,
       setCombinedXLabel,
@@ -2416,26 +2857,63 @@ const stepBack = useCallback(() => {
         isPl={isPl}
         disabled={!activeLogCurve}
         extraActions={
-          <label
-            className={`parameters-toggle ${logShowPoints ? 'is-on' : ''}`}
-            title={isPl ? 'Przełącz punkty danych' : 'Toggle data points'}
-          >
-            <input
-              type="checkbox"
-              checked={logShowPoints}
-              onChange={() => setLogShowPoints((prev) => !prev)}
-              disabled={!activeLogCurve}
-            />
-            <span className="parameters-toggle__slider" aria-hidden />
-            <span className="parameters-toggle__label">
-              {isPl ? 'Punkty danych' : 'Data points'}
-            </span>
-          </label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            <label
+              className={`parameters-toggle ${logShowPoints ? 'is-on' : ''}`}
+              title={isPl ? 'Przełącz punkty danych' : 'Toggle data points'}
+            >
+              <input
+                type="checkbox"
+                checked={logShowPoints}
+                onChange={() => setLogShowPoints((prev) => !prev)}
+                disabled={!activeLogCurve}
+              />
+              <span className="parameters-toggle__slider" aria-hidden />
+              <span className="parameters-toggle__label">
+                {isPl ? 'Punkty danych' : 'Data points'}
+              </span>
+            </label>
+            <label
+              className={`parameters-toggle ${combinedShowReplicateCurves ? 'is-on' : ''}`}
+              title={
+                isPl
+                  ? 'Pokaż/ukryj wygładzone krzywe replikatów'
+                  : 'Show/hide smoothed replicate curves'
+              }
+            >
+              <input
+                type="checkbox"
+                checked={combinedShowReplicateCurves}
+                onChange={() => setCombinedShowReplicateCurves((prev) => !prev)}
+                disabled={!activeLogCurve}
+              />
+              <span className="parameters-toggle__slider" aria-hidden />
+              <span className="parameters-toggle__label">
+                {isPl ? 'Krzywe replikatów' : 'Replicate curves'}
+              </span>
+            </label>
+            <div className="field small" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <label className="small">{isPl ? 'Rozrzut' : 'Spread'}</label>
+              <select
+                value={combinedUncertainty}
+                onChange={(e) => setCombinedUncertainty(e.target.value as any)}
+                disabled={!activeLogCurve}
+              >
+                <option value="none">{isPl ? 'Brak' : 'None'}</option>
+                <option value="sd-area">{isPl ? 'SD (zacieniowanie)' : 'SD (shading)'}</option>
+                <option value="sd-errorbars">{isPl ? 'SD (errorbary)' : 'SD (error bars)'}</option>
+                <option value="sem-area">{isPl ? 'SEM (zacieniowanie)' : 'SEM (shading)'}</option>
+                <option value="sem-errorbars">{isPl ? 'SEM (errorbary)' : 'SEM (error bars)'}</option>
+              </select>
+            </div>
+          </div>
         }
       />
     ),
     [
       activeLogCurve,
+      combinedShowReplicateCurves,
+      combinedUncertainty,
       copyPng,
       exportPng,
       logChartRef,
@@ -2447,6 +2925,8 @@ const stepBack = useCallback(() => {
       logYLabel,
       plotControlsHelp,
       setLogChartResetKey,
+      setCombinedShowReplicateCurves,
+      setCombinedUncertainty,
       setLogFontScale,
       setLogLegendVisible,
       setLogShowPoints,
@@ -2796,11 +3276,11 @@ const stepBack = useCallback(() => {
               value={degree}
               onChange={(event) => setDegree(Number(event.target.value) === 2 ? 2 : 1)}
             >
-              <option value={1}>{isPl ? 'Linia (stopien 1)' : 'Line (degree 1)'}</option>
-              <option value={2}>{isPl ? 'Parabola (stopien 2)' : 'Parabola (degree 2)'}</option>
+              <option value={1}>{isPl ? 'Linia (stopień 1)' : 'Line (degree 1)'}</option>
+              <option value={2}>{isPl ? 'Parabola (stopień 2)' : 'Parabola (degree 2)'}</option>
             </select>
           </FieldWithHelp>
-          <FieldWithHelp label={isPl ? 'Przejscia robust' : 'Robust passes'} help={robustHelp} maxWidth={240}>
+          <FieldWithHelp label={isPl ? 'Przejścia robust' : 'Robust passes'} help={robustHelp} maxWidth={240}>
             <input
               className="field-input"
               type="number"
@@ -2824,7 +3304,7 @@ const stepBack = useCallback(() => {
               }}
             />
           </FieldWithHelp>
-          <FieldWithHelp label={isPl ? 'Tolerancja zbieznosci' : 'Convergence tol.'} help={convHelp} maxWidth={240}>
+          <FieldWithHelp label={isPl ? 'Tolerancja zbieżnosci' : 'Convergence tol.'} help={convHelp} maxWidth={240}>
             <input
               className="field-input"
               type="number"
@@ -2847,9 +3327,9 @@ const stepBack = useCallback(() => {
               {isPl ? 'Cofnij' : 'Back'}
             </button>
             <button className="btn" disabled={!curves.length} onClick={handleExportCurves}>
-              {isPl ? 'Eksportuj wygladzone krzywe' : 'Export smoothed curves'}
+              {isPl ? 'Eksportuj wygładzone krzywe' : 'Export smoothed curves'}
             </button>
-            <button className="btn primary" disabled={!smoothedPayload} onClick={handleSendToParameters}>
+            <button className="btn primary" disabled={!smoothedPayload || isLoessRunning} onClick={handleSendToParameters}>
               {isPl ? 'Dalej' : 'Next'}
             </button>
           </div>
@@ -2862,7 +3342,7 @@ const stepBack = useCallback(() => {
                 />
               </div>
               <span className="small" style={{ color: 'var(--text-secondary)' }}>
-                {isPl ? 'Licze LOESS...' : 'Running LOESS...'} {Math.min(100, Math.max(0, loessProgress ?? 0))}%
+                {isPl ? 'Liczę LOESS...' : 'Running LOESS...'} {Math.min(100, Math.max(0, loessProgress ?? 0))}%
               </span>
             </div>
           )}
@@ -2924,6 +3404,19 @@ const stepBack = useCallback(() => {
                 step={1}
                 value={autoWindowSize}
                 onChange={(event) => setAutoWindowSize(event.target.value)}
+              />
+            </FieldWithHelp>
+            <FieldWithHelp
+              label={isPl ? 'MuMax sliding window size' : 'MuMax sliding window size'}
+              help={logMuMaxWindowHelp}
+            >
+              <input
+                className="field-input"
+                type="number"
+                min={2}
+                step={1}
+                value={muMaxWindowSizeInput}
+                onChange={(event) => setMuMaxWindowSizeInput(event.target.value)}
               />
             </FieldWithHelp>
             <FieldWithHelp
@@ -3096,8 +3589,14 @@ const stepBack = useCallback(() => {
                   legendMode="none"
                   mode="line"
                   bands={combinedBands}
-                  stdMode="area"
-                  xBands={highlightBands}
+                  stdMode={
+                    combinedSpread === 'none'
+                      ? 'none'
+                      : combinedSpread.endsWith('errorbars')
+                        ? 'errorbars'
+                        : 'area'
+                  }
+                  xBands={combinedXBands}
                   resetViewKey={chartResetKey}
                   fontScale={combinedFontScale}
                   legendEntries={combinedLegendEntries}
@@ -3200,6 +3699,14 @@ const stepBack = useCallback(() => {
                       xLabel={logXLabel}
                       yLabel={logYLabel}
                       legendMode="none"
+                      bands={logBands}
+                      stdMode={
+                        combinedSpread === 'none'
+                          ? 'none'
+                          : combinedSpread.endsWith('errorbars')
+                            ? 'errorbars'
+                            : 'area'
+                      }
                       xBands={highlightBands}
                       pointMarkers="none"
                       onPointSelection={handleLogSelection}
@@ -3216,9 +3723,6 @@ const stepBack = useCallback(() => {
                       minPanY={Number.NEGATIVE_INFINITY}
                       height={chartFullscreen === 'log' ? 620 : 380}
                     />
-                  </div>
-                  <div className="small" style={{ marginTop: 4 }}>
-                    Przytrzymaj klawisz Shift lub Alt i przeciagnij, aby wyznaczyc faze log dla zaznaczonej proby.
                   </div>
                 </PanelWithHelp>
               </div>

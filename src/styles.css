@@ -862,6 +862,46 @@ body {
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
+.options-dropdown {
+  position: relative;
+}
+
+.options-dropdown__summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  border: 1px solid var(--panel-border);
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.options-dropdown__summary::-webkit-details-marker {
+  display: none;
+}
+
+.options-dropdown[open] .options-dropdown__summary {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-light);
+  background: #ffffff;
+}
+
+.options-dropdown__panel {
+  position: absolute;
+  z-index: 40;
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--panel-border);
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.14);
+  display: grid;
+  gap: 10px;
+  min-width: 240px;
+}
+
 .field-input:focus {
   outline: none;
   border-color: var(--accent);
@@ -1327,6 +1367,10 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.plot-controls-float .parameters-samples-panel .replicate-panel__list {
+  max-height: none;
 }
 
 .plot-controls-float__replicates {
@@ -2378,6 +2422,7 @@ h2 {
 
 .parameters-samples-panel {
   max-height: calc(100vh - 32px);
+  margin-top: 0;
 }
 
 .parameters-samples-panel .replicate-panel__list {
@@ -2717,7 +2762,7 @@ h2 {
 .parameters-nav-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1999;
+  z-index: 10002;
   display: flex;
   justify-content: flex-end;
   align-items: center;

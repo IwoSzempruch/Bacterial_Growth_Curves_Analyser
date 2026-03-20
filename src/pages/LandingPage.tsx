@@ -1,5 +1,8 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useApp } from '@/state/store'
+import { applyImportedFile, describeImportResult } from '@/utils/importers'
+
+const builtInExampleDatasetUrl = new URL('../../Example-dataset.json', import.meta.url).href
 
 const content = {
   en: {
@@ -8,6 +11,8 @@ const content = {
     subtitle:
       'While working with growth readers, different labs use varied devices that generate data in multiple file formats. Steps such as blank selection, curve smoothing, and log-phase detection can be done in different ways, and these differences may lead to conflicting conclusions. This program enables preliminary analysis of bacterial growth data from many file formats in line with current literature recommendations. To analyse your data, follow the instructions.',
     primaryCta: 'Start workflow',
+    loadExampleCta: 'Load built-in example dataset',
+    loadExampleLoading: 'Loading built-in example dataset...',
     features: [
       {
         id: 'platePrep',
@@ -57,6 +62,8 @@ const content = {
     subtitle:
       'Podczas pracy z czytnikami wzrostu różne laboratoria używają różnych urządzeń, które wytwarzają dane w różnych formatach plików. Kolejne kroki analizy np. wyznaczenie blank, wygładzenie wykresów, wyznaczenie fazy logarytmicznej mogą być przeprowadzone różnymi sposobami, a różnice w kolejnych krokach postępowania mogą doprowadzić do sprzecznych wniosków. Ten program ma za zadanie umożliwienie wstępnej analizy danych wzrostu bakterii z wielu formatów plików w sposób zgodny z aktualnymi zaleceniami w literaturze.\nAby przeanalizować swoje dane podążaj za instrukcjami.',
     primaryCta: 'Uruchom workflow',
+    loadExampleCta: 'Załaduj wbudowane przykładowe dane',
+    loadExampleLoading: 'Ładowanie przykładowych danych...',
     features: [
       {
         id: 'platePrep',
@@ -105,11 +112,50 @@ const content = {
 export default function LandingPage() {
   const setActiveTab = useApp((s) => s.setActiveTab)
   const language = useApp((s) => s.language)
+  const [isLoadingExample, setIsLoadingExample] = useState(false)
+  const [exampleMessage, setExampleMessage] = useState<string | null>(null)
   const t = content[language]
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' })
   }, [])
+
+  const scrollToBottomAfterSetupOpen = useCallback(() => {
+    if (typeof window === 'undefined') return
+    const doScroll = () => {
+      const target =
+        (document.documentElement && document.documentElement.scrollHeight) ||
+        document.body.scrollHeight ||
+        0
+      window.scrollTo({ top: target, behavior: 'smooth' })
+    }
+    window.requestAnimationFrame(() => {
+      doScroll()
+      window.setTimeout(doScroll, 220)
+    })
+  }, [])
+
+  const handleLoadBuiltInExample = useCallback(async () => {
+    if (isLoadingExample) return
+    setIsLoadingExample(true)
+    setExampleMessage(null)
+    try {
+      const response = await fetch(builtInExampleDatasetUrl, { cache: 'no-store' })
+      if (!response.ok) {
+        throw new Error(`Unable to read Example-dataset.json (HTTP ${response.status})`)
+      }
+      const text = await response.text()
+      const file = new File([text], 'Example-dataset.json', { type: 'application/json' })
+      const result = await applyImportedFile(file)
+      setActiveTab('samplesMapping')
+      scrollToBottomAfterSetupOpen()
+      setExampleMessage(describeImportResult(result, file.name))
+    } catch (error: any) {
+      setExampleMessage(`[ERR] ${error?.message ?? String(error)}`)
+    } finally {
+      setIsLoadingExample(false)
+    }
+  }, [isLoadingExample, scrollToBottomAfterSetupOpen, setActiveTab])
 
   return (
     <div className="landing">
@@ -121,10 +167,18 @@ export default function LandingPage() {
             <p className="hero-subtitle">{t.subtitle}</p>
           </div>
           <div className="hero-cta-rail">
-            <div className="cta-buttons">
+            <div className="cta-buttons" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
               <button className="cta-btn primary" onClick={() => setActiveTab('samplesMapping')}>
                 {t.primaryCta}
               </button>
+              <button
+                className="cta-btn"
+                onClick={() => void handleLoadBuiltInExample()}
+                disabled={isLoadingExample}
+              >
+                {isLoadingExample ? t.loadExampleLoading : t.loadExampleCta}
+              </button>
+              {exampleMessage && <div className="small">{exampleMessage}</div>}
             </div>
           </div>
         </div>

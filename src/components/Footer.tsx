@@ -5,7 +5,7 @@ const copy = {
   en: {
     headline: 'End-to-end growth curve workflow.',
     contact: 'Email: growthcurves.analyser@gmail.com',
-    version: 'Demo v0.1.0',
+    version: 'Demo v0.0.3',
     builtBy: 'App created by Iwo Szempruch',
     linkedin: 'LinkedIn',
     portfolio: 'GitHub Portfolio',
@@ -13,7 +13,7 @@ const copy = {
   pl: {
     headline: 'Kompletny workflow do krzywych wzrostu.',
     contact: 'Email: growthcurves.analyser@gmail.com',
-    version: 'Demo v0.1.0',
+    version: 'Demo v0.0.3',
     builtBy: 'Aplikacja stworzona przez Iwo Szempruch',
     linkedin: 'LinkedIn',
     portfolio: 'Portfolio GitHub',

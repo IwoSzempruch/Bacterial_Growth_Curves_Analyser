@@ -1,3 +1,30 @@
+LOGS:
+150226 14:36
+"W folderze projektu jest pli "C:\Projects\BGCA-v0.0.3-150226\Example-dataset.json". W karcie Home dodaj przycisk zaraz poniżej "Start workflow" o nazwie "Load buil-in example dataset/Załaduj wbudowane przykładowe dane". Kliknięcie tego przycisku otworzy kolejną kartę na dole z zaadowanymi danymi z tego właśnie pliku."
+14:42
+"Przycisk miał być w resjach językowych a nie oba teksty na raz"
+14:43
+"Po kliknięciu tego przycisku, kolejna karta: Setup, z załadowanymi danymi ma się otworzyć przewinięta na sam dół."
+14:49
+"Zmiana logiki wygładzania krzywych:
+- najpierw zgodnie z parametrami podanymi przez urzytkownika wygładź krzywe kaego replikatu osobno i nnadpisz do pliku
+- następnie w każdym punkcie czasowym (ewentualnie w prawie takim samm czasie, jeżeli dla tej samej próby w różnych wells kolejne wartości t są oddalone od siebie o mniej niż 60s uśrednij je do jednej wartości) uśrednij wartości OD600 po korekcie blank i zapisz do pliku
+- następnie zgodnie z podanymi przez użytkownika parametrami przeprowadź wygłądzenie krzywej z uśrednionych dla całej póby danych, zapisz dane krzywej do pliku
+
+Upewnij się że wprowadzone przez ciebie zmiany w odzie nie zepsuja działania programu. Przed jakąkolwiej zmianą upenij się, że faktyczniejest potrzebna."
+15:06
+"Na wykresie Smoothed curves ma być domyślnie pokazana krzywa z uśredniowych wartości dla danej próby oraz oszacowana faza log dla tej właśnie krzywej.
+Powinna być opcja dodatkowego pokazania krzywych wygładzonych dla replikaów danej próby. Szacowanie wazy log ma być też robione osobno dla każdego replikatu. Jeżeli szacowane fazy log dla replikatow wychodzą poza szacowaną fazę log dla uśrednionej wygładzonej krzywej to ma być dodatkowe zacieniowanie w innym kolorze tych obszarów wychodzących poza obszar zacieniowania fazy log z uśrednionej wygładzonej krzywej. "
+15:15
+"Mumax ma być liczone osobno dla wygadzonych krzywych prób (z uśrednionych danych) oraz osobno dla kazdej wygładzonej krzywej replikatów i to ma być osobno zapisywane do pliku.
+Samo liczenie ma być:
+w adnotowanych przedziałach oznaczonych jako faza log
+W panelu "Log identification controls" dodaj pole na input "Mumax sliding window size" z domyślną wartością 5
+sliding window o zadanej wartości ma przesuwać się wewnątrz fazy log i liczyć nachylenie, tymczasowo je zapamiętująć
+okno o największym nachyleniu ma być adnotowane w pliku, a fragment krzywej z tymi punktami na wykresie ma mieć inny kolor.
+obliczone mumax ma byc zapisane w pliku"
+
+TODO:
 - Funkcja przeglądania danych z kilku analiz LATER.
 - Testing algorythm LATER
 - Fullscreen dla całego programu - przycisk w pasku zadań LATER
@@ -7,8 +34,3 @@ Przytrzymanie klawisza shift podcas klikania strzałki: zatrzymuje obecnie zazna
 - W karcie Parameters klikniecie przycisku X ma nawigować do kolejnej sekcji, nawet w trybie pełnoekranowym LATER
 - Importowanie plików w karcie parameters LATER
 - Dane wyświetlane po najechaniu na punkt wykresu mają odpowiadać zmianie jezyka. ma się to tyczyć wszystkich wykresów wszystkoch kart. LATER
-
-W Każdej Karcie panale "Plot controls" Mają w polskiej wersji nazywać się "Sterowanie wykresem". W każdym plot controls popraw polskie znaki. Upewnij się, że nie wprowadzicz corrupted znaków. PRzed każdą zmianą kodu upewnij się, że rozwiązujesz problem a nie szkodzisz. W Panelach plot control w karcie Wygładzanie Krzywych przycisk Pokaż/Ukryj Punkty surowe ma mieć tylko tekst "Punkty danych" albo po ang "Data points" Bez "Pokaż/Ukryj"
-W Plot controls popraw polskie znaki(Oś, Przedział itd.)
-
-LICZENIE PRZEDZIAŁÓW UFNOŚCI

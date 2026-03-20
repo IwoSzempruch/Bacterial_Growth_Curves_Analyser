@@ -14,6 +14,10 @@ export interface Series {
   name: string
   color: string
   points: SeriesPoint[]
+  strokeWidth?: number
+  opacity?: number
+  // Used by the built-in table legend (legendMode="table-below").
+  hideFromLegend?: boolean
 }
 
 type LegendEntry = {
@@ -800,9 +804,18 @@ export default function SimpleLineChart({
             const isHighlighted = highlightedNames.length ? highlightedNames.includes(s.name) : true
             const dimmed = highlightedNames.length > 0 && !isHighlighted
             const emphasized = emphasizeSeriesNames.includes(s.name)
-            const width = emphasized ? emphasizeStrokeWidth : (isHighlighted ? 2.6 : 2)
+            const baseWidth = typeof s.strokeWidth === 'number' ? s.strokeWidth : (isHighlighted ? 2.6 : 2)
+            const width = emphasized ? Math.max(baseWidth, emphasizeStrokeWidth) : baseWidth
+            const seriesOpacity = typeof s.opacity === 'number' ? s.opacity : 1
             return (
-              <path key={idx} d={renderPath(s.points)} fill="none" stroke={s.color} strokeWidth={width} opacity={dimmed ? 0.25 : 1} />
+              <path
+                key={idx}
+                d={renderPath(s.points)}
+                fill="none"
+                stroke={s.color}
+                strokeWidth={width}
+                opacity={(dimmed ? 0.25 : 1) * seriesOpacity}
+              />
             )
           })}
         </g>
@@ -1231,10 +1244,27 @@ export default function SimpleLineChart({
       {/* Table legend below the chart — grouped by sample name */}
       {legendMode === 'table-below' && series.length > 0 && (() => {
         const groups = new Map<string, {sample: string, items: {name:string, color:string, rep:string}[] }>()
+        const parseLegend = (name: string): { sample: string; rep: string } => {
+          const trimmed = (name ?? '').trim()
+          if (!trimmed) return { sample: '', rep: '' }
+          const mRep = trimmed.match(/^(.*?)\s+(r\d+.*)$/i)
+          if (mRep) return { sample: (mRep[1] ?? '').trim(), rep: (mRep[2] ?? '').trim() }
+          const bulletParts = trimmed
+            .split('•')
+            .map((p) => p.trim())
+            .filter(Boolean)
+          if (bulletParts.length >= 2) {
+            return { sample: bulletParts[0] ?? trimmed, rep: bulletParts.slice(1).join(' • ') }
+          }
+          const mParen = trimmed.match(/^(.*?)\s*\((.+)\)\s*$/)
+          if (mParen) return { sample: (mParen[1] ?? '').trim(), rep: (mParen[2] ?? '').trim() }
+          return { sample: trimmed, rep: '' }
+        }
         for (const s of series){
-          const m = s.name.match(/^(.*?)\s+(r\d+.*)$/i)
-          const sample = (m ? m[1] : s.name).trim()
-          const rep = (m ? m[2] : '')
+          if (s.hideFromLegend) continue
+          const parsed = parseLegend(s.name)
+          const sample = (parsed.sample || s.name).trim()
+          const rep = parsed.rep || ''
           if (!groups.has(sample)) groups.set(sample, { sample, items: [] })
           groups.get(sample)!.items.push({ name: s.name, color: s.color, rep: rep || s.name })
         }

@@ -85,6 +85,24 @@ export interface LogPhasePoint {
   od600: number;
 }
 
+export interface MuMaxWindowAnnotation {
+  start: number;
+  end: number;
+  windowSize: number;
+  slope: number;
+  points?: LogPhasePoint[];
+}
+
+export interface ReplicateLogPhaseSelection {
+  well: string;
+  replicate: number;
+  start: number;
+  end: number;
+  points?: LogPhasePoint[];
+  muMax?: number | null;
+  muMaxWindow?: MuMaxWindowAnnotation;
+}
+
 export interface LogPhaseSelection {
   sample: string;
   start: number;
@@ -92,6 +110,9 @@ export interface LogPhaseSelection {
   createdAt: string;
   manual?: boolean;
   points?: LogPhasePoint[];
+  muMax?: number | null;
+  muMaxWindow?: MuMaxWindowAnnotation;
+  replicateLogPhases?: ReplicateLogPhaseSelection[];
 }
 
 export interface SmoothedCurvesPayload {
